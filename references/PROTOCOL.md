@@ -5,11 +5,11 @@ This repository mixes **human-editable specifications** with **Python that must 
 | Artifact | Role |
 |----------|------|
 | [`SKILL.md`](../SKILL.md) | In-chat judging protocol for `/medbench-eval` (no Python required). |
-| [`capabilities.json`](capabilities.json) | Capability groups → task lists for the wizard and `eval.py batch --capability`. Edit this JSON to change grouping; `judge/capabilities.py` only loads it. |
+| [`capabilities.json`](capabilities.json) | Capability groups → task lists for the wizard and `eval.py batch --capability`. Edit this JSON to change grouping; `judge/refs.py` loads it. |
 | [`rubrics.yaml`](rubrics.yaml) | **Source** for task rubrics and criteria (Likert anchors). |
 | [`rubrics.md`](rubrics.md) | Human-readable copy for models (generated: `python -m judge.refs`). |
 | [`medbench-agent-95/`](medbench-agent-95/) | Gold questions/answers (JSONL). Data only. |
 
 **Why Python remains:** calling judge LLMs (`judge/llm_client.py`), scoring prompts (`judge/scoring.py`), and the combined batch pipeline (`judge/runner.py`: benchmark walk, DUT file I/O, gold RAG, reports), plus optional alignment (`scripts/validate.py`), are **not** replaceable by markdown alone without losing automation.
 
-**History:** rubric text used to live in standalone `judge/rubrics.py`; it now loads from **`references/rubrics.yaml`** via **`judge/refs.py`**. Export: `python -m judge.refs`.
+**History:** rubric criteria used to live only in Python; they now live in **`references/rubrics.yaml`** and are loaded by **`judge/refs.py`**. Regenerate `rubrics.md` with `python -m judge.refs`.
