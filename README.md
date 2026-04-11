@@ -2,7 +2,7 @@
 
 **LLM-as-judge evaluation for medical AI — built on the MedBench-Agent-95 benchmark.**
 
-Evaluate any LLM's clinical capabilities across 13 agentic medical tasks using structured rubrics and automated scoring. Works as a standalone Python tool, a Claude Code skill (`/medbench-eval`), and a CI/CD pipeline component.
+Evaluate any LLM's clinical capabilities across 13 agentic medical tasks using structured rubrics and automated scoring. The primary interface is the `/medbench-eval` Claude Code skill — an interactive TUI wizard that collects your model's answers and scores them automatically. A Python CLI is also available for batch automation.
 
 ---
 
@@ -40,20 +40,27 @@ Each task has a gold-standard answer used to calibrate what "correct" looks like
 
 ## Quick Start
 
+### Using the skill (recommended)
+
+1. Install this repo as a Claude Code skill
+2. Set a judge API key (see [Installation](#installation))
+3. Type in Claude Code:
+
+```
+/medbench-eval
+```
+
+The wizard guides you through 4 questions, then collects your model's answers and scores them automatically. See [TUI Wizard](#tui-wizard) for details.
+
+### Using the Python CLI
+
 ```bash
-# 1. Clone
 git clone https://github.com/YOUR_USERNAME/medqa-auto-eval-skills
 cd medqa-auto-eval-skills
-
-# 2. Install
 pip install -r requirements.txt
-
-# 3. Set API key (choose one)
-export ANTHROPIC_API_KEY=sk-ant-...        # claude-haiku-4-5 (default)
-# or configure .env (see Installation)
-
-# 4. Run the interactive wizard
-python eval.py
+export ANTHROPIC_API_KEY=sk-ant-...
+python eval.py          # interactive wizard
+python eval.py batch    # batch mode (see Python CLI section)
 ```
 
 ---
@@ -91,15 +98,55 @@ The `.env` file is loaded automatically at startup and is excluded from git.
 
 ---
 
-## Usage
+## TUI Wizard
 
-### Interactive wizard (recommended)
+Type `/medbench-eval` in Claude Code. The wizard runs four sequential questions — each answer unlocks the next:
+
+| Step | Question | Example answer |
+|------|----------|----------------|
+| Q1 — DUT | What model are you evaluating? | `gpt-4o-mini`, `my-fine-tuned-llm` |
+| Q2 — Capability | Which capability group? | Select from numbered menu [1]–[8] |
+| Q3 — Samples | How many samples per task? | `5` (Standard), `10` (Thorough), `30` (Full) |
+| Q4 — Answers | How do you have your model's answers? | See formats below |
+
+### Answer collection formats
+
+After Q3, the wizard presents four ways to provide answers:
+
+**1. Paste 1-by-1** — The wizard shows each benchmark question and waits for you to paste the model's answer. Best for quick spot-checks.
+
+**2. Paste with IDs** — Paste a block in any of these formats:
+```
+ID: 1
+Answer: The patient presents with...
+
+2: Aspirin 325mg should be given...
+```
+
+**3. CSV** — Paste or upload a CSV file:
+```csv
+id,response
+1,"The patient presents with..."
+2,"Aspirin 325mg should be given..."
+```
+
+**4. JSONL** — Paste or upload JSONL (one line per sample):
+```jsonl
+{"id": 1, "response": "The patient presents with..."}
+{"id": 2, "response": "Aspirin 325mg should be given..."}
+```
+
+Once the last answer is collected, **evaluation starts automatically** — no confirmation needed. Results stream as each sample is scored.
+
+---
+
+## Python CLI (Automation)
+
+### Interactive wizard
 
 ```bash
 python eval.py
 ```
-
-Prompts for DUT name, capability group, sample count, response source, and paths.
 
 ### Batch evaluation
 
@@ -361,13 +408,11 @@ The `medbench-agent-95/` directory contains 390 samples from the [MedBench](http
 
 ## Claude Code Skill
 
-Add this repo to Claude Code and use `/medbench-eval` directly in your session:
+`SKILL.md` defines the `/medbench-eval` skill. Add this repo as a skill source in Claude Code. The skill handles the full evaluation flow inline — no terminal required:
 
-```
-/medbench-eval
-```
-
-The skill (defined in `SKILL.md`) guides you through the same wizard interactively. Claude acts as the judge inline for single-response evaluation, or delegates to the Python CLI for batch runs.
+1. Wizard collects DUT, capability, sample count, and answers (text / CSV / JSONL)
+2. Claude loads `references/rubrics.md` and scores each answer against the task rubric
+3. Results stream inline as each sample is scored
 
 ---
 

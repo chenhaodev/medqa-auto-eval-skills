@@ -39,11 +39,18 @@ If `/medbench-eval` is called bare (no `Task`, `Question`, or `Capability` given
 
 **Q3 — Sample count (only after Q2 answer):** Quick (3) / Standard (5) / Thorough (10) / Full (30) samples per task?
 
-**Q4 — Mode (only after Q3 answer):**
-- "Paste a response to evaluate now" → collect Question + Response inline, proceed to single eval
-- "Batch eval over a benchmark directory" → ask for `BatchDir`, `ResponsesDir` (optional), `Output`
+**Q4 — How do you have your model's answers? (only after Q3 answer)**
 
-Confirm the full configuration, then proceed.
+Present these four options and collect answers accordingly:
+
+- **Paste 1-by-1** — Show each benchmark question to the user one at a time; they paste the model's answer after each prompt
+- **Paste with IDs** — User pastes a multi-line block; parse entries matching `ID: N / Answer: ...` or bare `N: answer text`
+- **CSV** — User pastes or uploads CSV with columns `id,response` (one row per sample; header optional)
+- **JSONL** — User pastes or uploads JSONL, one line per sample: `{"id": N, "response": "..."}` (restricted: must have `id` and `response` fields; reject any other schema with a clear error)
+
+**Auto-eval:** As soon as all answers for the selected sample count are collected, immediately begin evaluation — do not ask for confirmation. Score each sample and stream results as they are ready.
+
+Confirm the configuration summary, then collect answers.
 
 ---
 
