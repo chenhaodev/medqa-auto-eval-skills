@@ -7,7 +7,7 @@ description: >
   against gold answers; run MedQA-style automatic scoring; validate a health AI's clinical
   reasoning, tool use, long-context behavior, safety/refusal, or multi-agent orchestration;
   or invoke `/medbench-eval`. Also trigger when they mention judge alignment, ceiling scores,
-  discrimination between gold vs DUT, batch eval with `eval.py`, or "how good is my model"
+  discrimination between gold vs DUT, offline batch runs from the repo, or "how good is my model"
   on medical benchmarks — even without naming MedBench or rubrics. Supports 13 task types,
   structured Likert rubrics, optional few-shot calibration, and substance-over-style judging.
 ---
@@ -16,7 +16,9 @@ description: >
 
 MedBench-Agent-95: 13 tasks, Likert 1–5 per criterion → **normalized 0–100** = (average criterion score − 1) / 4 × 100. Judge **substance**, not formatting.
 
-**Rubrics:** Read `references/rubrics.md` first (auto-generated from `judge/rubrics.py`; same criterion **names** as `eval.py`; do not invent names). **Gold benchmark:** questions + gold answers live in `references/medbench-agent-95/{Task}.jsonl` — load **one row by id** when showing items; see `references/README.md`. **Scoring:** gold calibrates “what good looks like”; never require verbatim match to DUT.
+**Rubrics:** Read `references/rubrics.md` first (generated from `references/rubrics.yaml`) — use the **exact criterion names** listed there (do not invent names). **Gold benchmark:** questions + gold answers live in `references/medbench-agent-95/{Task}.jsonl` — load **one row by id** when showing items; details in [`references/README.md`](references/README.md). **Scoring:** gold calibrates “what good looks like”; never require verbatim match to DUT.
+
+**This file defines in-chat behavior only.** Optional install, batch files on disk, and judge-alignment checks are **not** required for `/medbench-eval` — see [`README.md`](README.md) if the user needs repo automation.
 
 ---
 
@@ -38,13 +40,9 @@ Restate DUT + capability + N + format, then collect. When enough answers are in,
 | | |
 |-|-|
 | `DUT`, `Task` or `Capability`, `Question`, `Response` | single eval; optional `Gold` |
-| `Mode: batch` + `BatchDir` (default `references/medbench-agent-95`), `ResponsesDir` or `ResponsesFile`, `Output` | automation; optional `SamplesPerTask`, `CalibrateN`, `CalibrateMode`, `Model` |
+| `Mode: batch` + paths for benchmark / responses / output | **only if** the user is driving automation from the repo (same concepts as below; file layouts → [`references/README.md`](references/README.md)) |
 
 Capability keys: `reasoning`, `long_context`, `tool_use`, `orchestration`, `self_correction`, `role_adapt`, `safety`, `full`. Tasks: MedCOT, MedCallAPI, MedCollab, MedDBOps, MedDecomp, MedDefend, MedLongConv, MedLongQA, MedPathPlan, MedReflect, MedRetAPI, MedRoleAdapt, MedShield. Judge models: `claude-haiku-4-5` (default), `minimax-m2.5`, `deepseek-chat`.
-
-Batch: `python eval.py batch --capability reasoning --dut NAME --responses-dir ... --output ...` (default `--benchmark` = shipped `references/medbench-agent-95`) — see `README.md` for DUT file formats, `--calibrate-n`, `eval.py single`.
-
-**Judge alignment (CLI, optional):** to sanity-check that the judge separates gold from weak tiers or reproduces a known gold–DUT gap, from repo root run `python -m scripts.validate` (see `README.md`). Not required for routine `/medbench-eval` scoring.
 
 ---
 

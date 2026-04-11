@@ -1,15 +1,12 @@
-# `judge/` package map
+# `judge/` package (four modules)
+
+Keep imports stable: **`refs`** (paths + protocol data), **`llm_client`** (remote judge APIs), **`scoring`** (single-sample judge), **`runner`** (batch loop, DUT file I/O, gold RAG, reports).
 
 | Module | Role |
 |--------|------|
-| `scoring.py` | Single-call judge: score one DUT reply (`judge_response` / `judge_against_gold`). |
-| `batch_runner.py` | Walk gold JSONL, sample, optional calibration anchors, aggregate `BenchmarkResult`. |
-| `llm_client.py` | Judge backends: Anthropic Haiku, MiniMax, DeepSeek, etc. |
-| `dut_responses.py` | Parse DUT outputs from dirs, JSONL, or delimited text. |
-| `gold_retrieval.py` | `GoldAnchorIndex`: BM25 or embedding retrieval over gold for `--calibrate-n`. |
-| `rubrics.py` | 13 task rubrics (source of truth; `references/rubrics.md` is generated). |
-| `capabilities.py` | Capability groups → task lists (wizard / `--capability`). |
-| `report.py` | Write `summary.json`, `details.jsonl`, `report.md`. |
-| `paths.py` | Default benchmark path `references/medbench-agent-95`. |
+| `refs.py` | Repo paths; `references/capabilities.json` + `references/rubrics.yaml`; `python -m judge.refs` regenerates `references/rubrics.md`. |
+| `llm_client.py` | Judge backends: Anthropic, MiniMax, DeepSeek. |
+| `scoring.py` | `judge_response` / `judge_against_gold` and prompt assembly. |
+| `runner.py` | DUT response file parsing, `GoldAnchorIndex` (BM25/embedding), `run_benchmark`, `save_results` / `print_summary`. |
 
-**Dependency sketch:** `batch_runner` → `scoring` → `llm_client`; `batch_runner` → `gold_retrieval`, `dut_responses`.
+**Dependency sketch:** `runner` → `scoring` → `llm_client`; `runner` → `refs`; `scoring` → `refs`.

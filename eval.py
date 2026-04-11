@@ -13,7 +13,7 @@ import json
 import sys
 from pathlib import Path
 
-from judge.paths import DEFAULT_BENCHMARK_REL, default_benchmark_dir, resolve_benchmark_dir
+from judge.refs import DEFAULT_BENCHMARK_REL, default_benchmark_dir, resolve_benchmark_dir
 
 
 def _interactive_wizard() -> argparse.Namespace:
@@ -21,7 +21,7 @@ def _interactive_wizard() -> argparse.Namespace:
     Interactive session wizard. Prompts user for capability, DUT, and options.
     Returns a populated Namespace as if batch command args were parsed.
     """
-    from judge.capabilities import list_capabilities
+    from judge.refs import list_capabilities
 
     print()
     print("=" * 60)
@@ -124,8 +124,7 @@ def _interactive_wizard() -> argparse.Namespace:
 
 def cmd_batch(args: argparse.Namespace) -> None:
     """Run batch evaluation over benchmark JSONL files."""
-    from judge.batch_runner import run_benchmark
-    from judge.report import save_results, print_summary
+    from judge.runner import print_summary, run_benchmark, save_results
 
     tasks = [args.task] if getattr(args, "task", None) else None
     capability = getattr(args, "capability", None)
@@ -201,8 +200,7 @@ def cmd_single(args: argparse.Namespace) -> None:
 
 def cmd_list_tasks(args: argparse.Namespace) -> None:
     """List all supported tasks and capability groups."""
-    from judge.rubrics import RUBRICS
-    from judge.capabilities import list_capabilities
+    from judge.refs import RUBRICS, list_capabilities
 
     print("\nCapability Groups:\n")
     for cap in list_capabilities():

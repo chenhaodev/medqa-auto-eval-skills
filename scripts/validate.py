@@ -48,10 +48,8 @@ from typing import Optional
 
 from judge.scoring import judge_response
 from judge.llm_client import DEFAULT_MODEL
-from judge.paths import default_benchmark_dir, resolve_benchmark_dir
-from judge.rubrics import list_tasks
-from judge.batch_runner import _load_anchor_examples
-from judge.gold_retrieval import GoldAnchorIndex
+from judge.refs import default_benchmark_dir, resolve_benchmark_dir, list_tasks
+from judge.runner import GoldAnchorIndex, _load_anchor_examples
 
 
 # Refusal string used for TIER-3 (minimal / off-task) test
@@ -518,7 +516,8 @@ def _write_compare_report(
         "**Gap ratio < 0.5x**: judge can't distinguish gold from DUT → rubric anchors need sharpening.",
         "**Discrimination < 80%**: judge ranks DUT above gold on >20% of samples → calibration needed.",
         "",
-        "To optimize: run `/autoresearch` with metric=discrimination_rate, scope=judge/rubrics.py+judge/scoring.py",
+        "To optimize: run `/autoresearch` with metric=discrimination_rate, "
+        "scope=references/rubrics.yaml+judge/scoring.py",
     ]
 
     report_path = out_dir / "compare-report.md"
@@ -627,7 +626,7 @@ def _write_report(out_dir: Path, alignments: list[TaskAlignment], model: str) ->
         "",
         "If **discrimination < 80% or ρ < 0.7**: systemic alignment failure.",
         "  → Run `/autoresearch` with goal='maximize scripts.validate alignment score' and",
-        "    scope='judge/scoring.py SYSTEM_PROMPT and judge/rubrics.py criteria anchors'.",
+        "    scope='judge/scoring.py SYSTEM_PROMPT and references/rubrics.yaml anchors'.",
     ]
 
     report_path = out_dir / "validate-report.md"

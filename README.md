@@ -1,133 +1,169 @@
 # medbench-eval
 
-**LLM-as-judge** on the **MedBench-Agent-95** benchmark (390 items, 13 task types). Per-criterion Likert 1–5, normalized to **0–100**.
+Use an **LLM judge** to score answers on **MedBench-Agent-95** (390 items, **13 task types**). Each criterion is Likert **1–5**; scores normalize to **0–100**.
 
-**Entry points:** `/medbench-eval` via `SKILL.md` (interactive); `eval.py` for batch/single automation. Rubric anchors: `references/rubrics.md` (generated — run `python scripts/export_rubrics_md.py` after editing `judge/rubrics.py`). **Gold JSONL:** `references/medbench-agent-95/` — see [`references/README.md`](references/README.md).
+| You are… | Start here |
+|----------|------------|
+| **A person** using Claude / Cursor with the skill | Read **[`SKILL.md`](SKILL.md)** — that is the contract for `/medbench-eval`. This README is for the **repo and CLI**. |
+| **An agent** automating setup and commands | Jump to **[Automation checklist](#automation-checklist-for-agents)** (copy-paste blocks below). |
+| **A maintainer** changing rubrics, capabilities, or dependencies | See **[Maintainers](#maintainers)**, [`references/PROTOCOL.md`](references/PROTOCOL.md), and [`references/README.md`](references/README.md). |
 
 ---
 
-## Install
+## What you need
 
-Python **3.11+**. Set `ANTHROPIC_API_KEY` for the default judge (`claude-haiku-4-5`). Optional: `MINIMAX_*` / `DEEPSEEK_*` (see [`judge/llm_client.py`](judge/llm_client.py)). A root `.env` is auto-loaded.
+1. **Python 3.11+**
+2. **Repository root** as the working directory (the folder that contains `pyproject.toml`).
+3. **API key** for the default judge: set **`ANTHROPIC_API_KEY`** (model `claude-haiku-4-5`). Other backends need extra env vars — see [`judge/llm_client.py`](judge/llm_client.py).
+4. A **`.env`** file in the repo root is loaded automatically. **Do not commit `.env`.**
 
-**Using [uv](https://docs.astral.sh/uv/) (recommended):** from the repo root, run `uv sync`. That creates `.venv/` and installs dependencies from **`uv.lock`**.
+---
 
-**Using pip:** `pip install -r requirements.txt` — that file is **generated** from the lockfile:
+## Install dependencies
+
+**Recommended ([uv](https://docs.astral.sh/uv/))** — reproducible installs from **`uv.lock`**:
 
 ```bash
-uv export --format requirements-txt -o requirements.txt
+cd /path/to/repo   # must contain pyproject.toml
+uv sync            # runtime only; creates .venv/
+
+# include pytest (for tests/README “smoke”)
+uv sync --group dev
 ```
 
-After changing **`pyproject.toml`** `[project.dependencies]`, run **`uv lock`** then optionally re-export `requirements.txt` for pip users.
-
-**Version control:** commit **`pyproject.toml`**, **`uv.lock`**, and **`requirements.txt`** together so installs are reproducible. **`uv.lock`** is the source of truth for resolved versions; **`requirements.txt`** is an export for `pip` users.
-
----
-
-## For coding agents (Cursor, Claude Code, …)
-
-Use this when you **automate** setup from a clean environment (no interactive `eval.py` wizard). Replace `<repo-url>` with the real Git remote.
-
-1. **Clone the repository**
-   ```bash
-   git clone <repo-url>
-   cd <checkout-directory>   # repository root: must contain pyproject.toml
-   ```
-   (If you only have a tarball, unpack it and `cd` into that root.)
-
-2. **Install uv** (if `uv` is not already on `PATH`):
-   ```bash
-   curl -LsSf https://astral.sh/uv/install.sh | sh
-   ```
-   Follow the installer’s note to reload your shell or add `~/.local/bin` to `PATH`.
-
-3. **Install dependencies** (creates **`.venv/`** from **`uv.lock`**; includes **pytest** for checks):
-   ```bash
-   uv sync --group dev
-   ```
-
-4. **Configure API keys** — create **`.env`** in the repo root (do **not** commit it):
-   ```bash
-   printf '%s\n' 'ANTHROPIC_API_KEY=sk-ant-api03-...' > .env
-   ```
-   Optional env vars for non-default judge backends: see [`judge/llm_client.py`](judge/llm_client.py).
-
-5. **Run offline smoke tests** (no network to model APIs):
-   ```bash
-   uv run --group dev pytest tests/ -q
-   python -m scripts.validate --help
-   python eval.py tasks
-   ```
-
-6. **Operate** — read [`SKILL.md`](SKILL.md) for `/medbench-eval` prompt conventions; use `python eval.py batch …` or `python eval.py single …` for real judging (**requires** a valid `ANTHROPIC_API_KEY` or another configured backend).
-
-`pip install -r requirements.txt` installs **runtime** dependencies only; use **`uv sync --group dev`** if you need **pytest** and the lockfile-resolved dev toolchain.
-
----
-
-## Quick start
+**Using pip only** (no dev tools):
 
 ```bash
+pip install -r requirements.txt
+```
+
+`requirements.txt` is **exported** from the lockfile (`uv export --format requirements-txt -o requirements.txt`). After you edit **`pyproject.toml`** dependencies, run **`uv lock`**, then re-export if pip users need an updated file.
+
+---
+
+## Automation checklist (for agents)
+
+Execute **in order**. Assume the shell’s cwd is the repository root.
+
+| Step | Action | Command or file |
+|------|--------|-------------------|
+| 1 | Obtain the tree | `git clone <repo-url>` then `cd` into the root, **or** unpack a tarball and `cd` there. |
+| 2 | Install **uv** if missing | `curl -LsSf https://astral.sh/uv/install.sh \| sh` — then ensure `uv` is on `PATH` (often `~/.local/bin`). |
+| 3 | Install deps + dev | `uv sync --group dev` |
+| 4 | Configure secrets | Create `.env` with at least `ANTHROPIC_API_KEY=...` |
+| 5 | Verify (no paid API calls in these checks) | `uv run --group dev pytest tests/ -q` then `python -m scripts.validate --help` and `python eval.py tasks` |
+| 6 | Run real judging | Needs a valid key — see **[Run evaluations](#run-evaluations)** |
+
+For conversational scoring conventions (wizard flow, rubric names, output template), read **`SKILL.md`**. This README does not duplicate that protocol.
+
+---
+
+## Run evaluations
+
+**Always run commands from the repository root** so paths like `references/medbench-agent-95` resolve correctly (`judge/refs.py`).
+
+### 1. See what the CLI can do
+
+```bash
+python eval.py --help
 python eval.py tasks
-python eval.py
-
-python eval.py batch \
-  --capability reasoning --dut YOUR_MODEL \
-  --responses-dir outputs/YOUR_MODEL/ --samples 5 --output results/
-
-python eval.py single --task MedCOT --dut YOUR_MODEL \
-  --question "..." --response "..." [--gold-answer "..."]
 ```
 
-`--benchmark` defaults to the shipped **`references/medbench-agent-95`** (absolute path resolved from repo root via `judge/paths.py`).
+### 2. Batch (typical automation)
 
-**Capability keys:** `reasoning`, `long_context`, `tool_use`, `orchestration`, `self_correction`, `role_adapt`, `safety`, `full`.
+```bash
+python eval.py batch \
+  --capability reasoning \
+  --dut YOUR_MODEL_NAME \
+  --responses-dir path/to/responses/ \
+  --samples 5 \
+  --output results/run-001/
+```
 
-**DUT inputs:** `--responses-dir` as `{dir}/{Task}/{id}.txt`, or `--responses-file` as compact JSONL, full benchmark JSONL, or `=== Task | id ===` delimited TXT.
+- **`--benchmark`** defaults to the shipped gold data: `references/medbench-agent-95/`.
+- **Outputs** under `--output`: `summary.json`, `details.jsonl`, `report.md`.
 
-**Calibration:** `--calibrate-n 2` and optionally `--calibrate-mode bm25` (often helps MedCollab, MedDBOps, MedShield). Retrieval indexes gold text from the same benchmark directory.
+### 3. Single item (one question + one response)
 
-**Batch output:** `summary.json`, `details.jsonl`, `report.md` under `--output`.
+```bash
+python eval.py single \
+  --task MedCOT \
+  --dut YOUR_MODEL_NAME \
+  --question "..." \
+  --response "..." \
+  [--gold-answer "..."]
+```
+
+### 4. Interactive wizard (human)
+
+```bash
+python eval.py
+```
+
+With **no arguments**, this starts prompts on stdin — **unsuitable for unattended agents**.
+
+### Options you will need from docs
+
+| Topic | Where to read |
+|-------|----------------|
+| Capability keys (`reasoning`, `long_context`, …) and task lists | `python eval.py tasks` and [`SKILL.md`](SKILL.md) |
+| DUT file layouts (`--responses-dir`, `--responses-file`) | [`references/README.md`](references/README.md) |
+| **`--calibrate-n`** / **`--calibrate-mode`** (few-shot anchors, BM25, etc.) | `--help` on `eval.py batch` and [`judge/README.md`](judge/README.md) |
 
 ---
 
 ## Judge alignment (validate)
 
-From the **repository root**:
+Optional sanity check that the judge ranks gold above weak tiers (uses the API — not “offline”):
 
 ```bash
+python -m scripts.validate --task MedCOT --samples 3
+# or
 python -m scripts.validate --all-tasks --samples 5
 ```
 
-Equivalent: `python scripts/validate.py ...` (same module). Default `--benchmark` points at `references/medbench-agent-95`.
+Same entry point: `python scripts/validate.py …`.
 
 ---
 
-## Documentation (English)
-
-| Doc | Contents |
-|-----|----------|
-| [`references/README.md`](references/README.md) | Rubrics generation, gold benchmark layout, skill usage |
-| [`judge/README.md`](judge/README.md) | Python package: modules and dependency sketch |
-
----
-
-## Layout
+## Project layout
 
 ```
-pyproject.toml, uv.lock       # dependencies (uv); requirements.txt exported for pip
-tests/                        # pytest E2E smoke (CLI + offline gold index)
-eval.py                       # CLI: wizard, batch, single, tasks
+pyproject.toml          # project metadata + runtime deps
+uv.lock                 # locked versions (commit this)
+requirements.txt        # pip export of runtime deps (commit this)
+tests/                  # pytest smoke (CLI + gold files + BM25 index)
+eval.py                 # CLI: wizard | batch | single | tasks
 scripts/
-  export_rubrics_md.py        # regenerate references/rubrics.md
-  validate.py                 # judge–human alignment (run as module, see above)
-judge/                        # see judge/README.md
+  validate.py           # alignment CLI (prefer: python -m scripts.validate)
+judge/                  # refs | llm_client | scoring | runner — see judge/README.md
 references/
-  README.md
-  rubrics.md                  # generated
-  medbench-agent-95/*.jsonl   # gold standard
-SKILL.md
+  PROTOCOL.md           # what is “data/spec” vs executable code
+  capabilities.json     # capability groups (wizard / --capability); edit for task lists
+  rubrics.yaml          # task rubrics (source); edit criteria here
+  rubrics.md            # generated from rubrics.yaml; do not edit by hand
+  medbench-agent-95/    # gold JSONL per task
+SKILL.md                # skill /medbench-eval behavior
 ```
+
+---
+
+## More documentation
+
+| File | Contents |
+|------|----------|
+| [`references/README.md`](references/README.md) | Gold file format, rubric regeneration, skill-oriented notes |
+| [`references/PROTOCOL.md`](references/PROTOCOL.md) | Protocol vs Python in this repo |
+| [`judge/README.md`](judge/README.md) | Module map and implementation notes |
+
+---
+
+## Maintainers
+
+- Commit **`pyproject.toml`**, **`uv.lock`**, and **`requirements.txt`** together when dependencies change.
+- After editing the **`[project]` `dependencies`** list in `pyproject.toml`: run `uv lock`, then optionally `uv export …` for pip users.
+- Regenerate **`references/rubrics.md`** after changing **`references/rubrics.yaml`**: `python -m judge.refs`.
+- Edit **`references/capabilities.json`** to change capability → task grouping (no Python edit required for that).
 
 ---
 

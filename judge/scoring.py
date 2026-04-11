@@ -11,7 +11,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Optional
 
-from .rubrics import Rubric, get_rubric
+from .refs import Rubric, get_rubric
 from .llm_client import call_model, ModelResponse, DEFAULT_MODEL
 
 

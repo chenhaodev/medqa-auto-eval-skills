@@ -46,19 +46,33 @@ def test_eval_tasks_lists_medcot() -> None:
     assert "MedCOT" in proc.stdout
 
 
-def test_export_rubrics_script_imports() -> None:
-    """Ensures rubrics ordering matches RUBRICS (same checks as export main)."""
-    from scripts.export_rubrics_md import _TASK_ORDER
-    from judge.rubrics import RUBRICS
+def test_capabilities_protocol_json() -> None:
+    """references/capabilities.json drives judge.refs (8 groups)."""
+    from judge.refs import CAPABILITY_GROUPS, list_capabilities
 
-    missing = [t for t in _TASK_ORDER if t not in RUBRICS]
+    assert len(CAPABILITY_GROUPS) == 8
+    assert len(list_capabilities()) == 8
+
+
+def test_rubric_doc_order_matches_rubrics() -> None:
+    """Ensures RUBRIC_DOC_ORDER matches RUBRICS keys (export invariant)."""
+    from judge.refs import RUBRIC_DOC_ORDER, RUBRICS
+
+    missing = [t for t in RUBRIC_DOC_ORDER if t not in RUBRICS]
     assert not missing
-    extra = set(RUBRICS.keys()) - set(_TASK_ORDER)
+    extra = set(RUBRICS.keys()) - set(RUBRIC_DOC_ORDER)
     assert not extra
 
 
+def test_rubrics_yaml_on_disk() -> None:
+    """Protocol file exists next to repo usage."""
+    yaml_path = REPO_ROOT / "references" / "rubrics.yaml"
+    assert yaml_path.is_file()
+    assert yaml_path.stat().st_size > 1000
+
+
 def test_shipped_benchmark_has_thirteen_jsonl() -> None:
-    from judge.paths import default_benchmark_dir
+    from judge.refs import default_benchmark_dir
 
     bd = default_benchmark_dir()
     assert bd.is_dir(), f"missing benchmark dir: {bd}"
@@ -67,8 +81,8 @@ def test_shipped_benchmark_has_thirteen_jsonl() -> None:
 
 
 def test_gold_anchor_index_bm25_retrieve() -> None:
-    from judge.gold_retrieval import GoldAnchorIndex
-    from judge.paths import default_benchmark_dir
+    from judge.refs import default_benchmark_dir
+    from judge.runner import GoldAnchorIndex
 
     idx = GoldAnchorIndex(default_benchmark_dir(), task="MedCOT", backend="bm25")
     assert len(idx) >= 1
@@ -87,7 +101,7 @@ def test_gold_anchor_index_bm25_retrieve() -> None:
 def test_sample_benchmark_lines_are_valid_json(task_file: str) -> None:
     import json
 
-    from judge.paths import default_benchmark_dir
+    from judge.refs import default_benchmark_dir
 
     path = default_benchmark_dir() / task_file
     assert path.is_file()
