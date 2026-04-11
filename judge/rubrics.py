@@ -1,6 +1,11 @@
 """
 Task-specific rubrics for MedBench-Agent-95 evaluation.
 Each rubric defines 3-5 criteria scored 1-5 (Likert scale).
+
+Human-readable markdown for the Claude skill is generated — do not edit
+references/rubrics.md by hand:
+
+    python scripts/export_rubrics_md.py
 """
 
 from dataclasses import dataclass

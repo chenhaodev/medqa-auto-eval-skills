@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from .runner import BenchmarkResult, SampleResult
+from .batch_runner import BenchmarkResult, SampleResult
 
 
 def _task_stats(results: list[SampleResult]) -> dict[str, Any]:

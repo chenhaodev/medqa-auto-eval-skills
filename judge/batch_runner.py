@@ -1,6 +1,5 @@
 """
-Batch evaluation runner for MedBench-Agent-95.
-Loads benchmark JSONL files and runs the LLM-as-judge over samples.
+Batch evaluation loop for MedBench-Agent-95: load JSONL, call scoring, aggregate.
 """
 
 import json
@@ -11,12 +10,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-from .judge import judge_response, judge_against_gold, JudgementResult
+from .scoring import judge_response, judge_against_gold, JudgementResult
 from .rubrics import list_tasks, RUBRICS
 from .capabilities import get_tasks_for_capability, CAPABILITY_GROUPS
-from .models import DEFAULT_MODEL
-from .input_parser import parse_responses, ParsedResponses
-from .rag import GoldRAG
+from .llm_client import DEFAULT_MODEL
+from .dut_responses import parse_responses, ParsedResponses
+from .gold_retrieval import GoldAnchorIndex
 
 
 BENCHMARK_TASKS = list_tasks()  # all 13 tasks
@@ -130,7 +129,7 @@ def run_benchmark(
     Run the LLM-as-judge over benchmark samples.
 
     Args:
-        benchmark_dir: Path to the medbench-agent-95/ directory
+        benchmark_dir: Path to references/medbench-agent-95/ (gold JSONL per task)
         tasks: List of task names to evaluate (None = all tasks)
         capability: Capability group key to evaluate (overrides tasks if set)
         model: Judge model to use
@@ -150,7 +149,7 @@ def run_benchmark(
                      Recommended: 2 for most tasks, 3 for complex task types.
         calibrate_mode: How to select anchor examples. "random" (default) samples randomly
                      with a fixed seed per task. "bm25" or "embedding" use semantic retrieval
-                     (GoldRAG) to select the most similar gold examples per question — this
+                     (GoldAnchorIndex) to select the most similar gold examples per question — this
                      improves calibration quality when clinical domain matters.
         seed: Random seed for sample selection
         delay_seconds: Delay between API calls to avoid rate limiting
@@ -198,8 +197,8 @@ def run_benchmark(
         }
         task_results = []
 
-        # Set up calibration: build RAG index or load static anchor pool once per task
-        rag_index: Optional[GoldRAG] = None
+        # Set up calibration: build gold anchor index or load static anchor pool once per task
+        gold_anchor_index: Optional[GoldAnchorIndex] = None
         anchor_examples_static: Optional[list[dict]] = None
         if calibrate_n > 0:
             if calibrate_mode == "random":
@@ -210,12 +209,20 @@ def run_benchmark(
                     print(f"  [{task}] calibrating with {len(anchor_examples_static)} gold anchors (random)")
             else:
                 try:
-                    rag_index = GoldRAG(benchmark_path, task, backend=calibrate_mode)
+                    gold_anchor_index = GoldAnchorIndex(
+                        benchmark_path, task, backend=calibrate_mode
+                    )
                     if verbose:
-                        print(f"  [{task}] RAG index built ({calibrate_mode}, {len(rag_index)} samples)")
+                        print(
+                            f"  [{task}] gold anchor index ready ({calibrate_mode}, "
+                            f"{len(gold_anchor_index)} samples)"
+                        )
                 except Exception as e:
                     if verbose:
-                        print(f"  [{task}] RAG init failed ({e}), falling back to random anchors")
+                        print(
+                            f"  [{task}] gold anchor index init failed ({e}), "
+                            f"falling back to random anchors"
+                        )
                     anchor_examples_static = _load_anchor_examples(
                         benchmark_path, task, n=calibrate_n, seed=seed, exclude_ids=selected_ids
                     )
@@ -254,8 +261,8 @@ def run_benchmark(
             # Resolve per-sample anchor examples
             anchor_examples: Optional[list[dict]] = None
             if calibrate_n > 0:
-                if rag_index is not None:
-                    anchor_examples = rag_index.retrieve(
+                if gold_anchor_index is not None:
+                    anchor_examples = gold_anchor_index.retrieve(
                         question=question,
                         n=calibrate_n,
                         exclude_ids={int(sample_id)},

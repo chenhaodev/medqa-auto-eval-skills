@@ -1,26 +1,27 @@
 """
-RAG-based gold anchor retrieval for LLM-as-judge calibration.
+Semantic gold-anchor retrieval for LLM-as-judge calibration.
 
 Instead of randomly sampling gold anchor examples, this module retrieves the
-gold examples that are MOST SEMANTICALLY SIMILAR to the question being evaluated.
+gold examples that are most similar to the question being evaluated (BM25 or
+embedding similarity over the task's gold JSONL).
 
 For MedCollab and other task types where the calibration example's clinical
-domain matters, semantic retrieval dramatically improves judge alignment:
+domain matters, this improves judge alignment:
 
-  Random: "Evaluate drug interaction question" → show lung cancer orchestration example
-  RAG:    "Evaluate drug interaction question" → show drug ADR orchestration example
+  Random: "Evaluate drug interaction question" → lung cancer orchestration example
+  Anchors: same question → drug ADR orchestration example
 
-Two similarity backends:
+Backends:
 
   "bm25"      — character-level BM25 (default, zero dependencies, works well for Chinese)
-  "embedding" — SiliconFlow BAAI/bge-m3 embeddings (better quality, needs SILICONFLOW key)
-               Env vars: MINIMAX_API_KEY (reused) + MINIMAX_BASE_URL
+  "embedding" — SiliconFlow BAAI/bge-m3 embeddings (needs MINIMAX_API_KEY + MINIMAX_BASE_URL)
 
 Usage:
-    from judge.rag import GoldRAG
+    from judge.paths import default_benchmark_dir
+    from judge.gold_retrieval import GoldAnchorIndex
 
-    rag = GoldRAG(benchmark_dir="medbench-agent-95", task="MedCollab")
-    examples = rag.retrieve(question=current_question, n=2, exclude_ids={97, 31})
+    idx = GoldAnchorIndex(default_benchmark_dir(), task="MedCollab")
+    examples = idx.retrieve(question=current_question, n=2, exclude_ids={97, 31})
     # returns [{"question": str, "answer": str}, ...]
 """
 
@@ -150,15 +151,15 @@ def _embed(texts: list[str], api_key: str, base_url: str) -> list[list[float]]:
 
 # ── Main class ────────────────────────────────────────────────────────────────
 
-class GoldRAG:
+class GoldAnchorIndex:
     """
-    Retrieves the most semantically similar gold examples for a given question.
+    Index over one task's gold JSONL for retrieving similar anchor examples.
 
     Args:
-        benchmark_dir: Path to medbench-agent-95/ directory
+        benchmark_dir: Path to references/medbench-agent-95/ (gold JSONL)
         task: Task name (e.g. "MedCollab")
         backend: "bm25" (default) or "embedding"
-        embed_field: Which field to embed/index — "question" (default), "answer", or "both"
+        embed_field: Which field to index — "question" (default), "answer", or "both"
     """
 
     def __init__(

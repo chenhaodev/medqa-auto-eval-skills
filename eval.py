@@ -1,41 +1,19 @@
 #!/usr/bin/env python3
-"""
-medbench-eval: LLM-as-judge for MedBench-Agent-95 medical AI benchmark.
+"""medbench-eval: LLM-as-judge on MedBench-Agent-95.
 
-Usage:
-  # Interactive wizard (recommended — prompts for capability, DUT, options)
   python eval.py
+  python eval.py batch --capability reasoning --dut NAME ...
+  python eval.py single --task MedCOT --question ... --response ... --dut NAME
 
-  # Evaluate a specific capability group
-  python eval.py batch --benchmark medbench-agent-95/ --capability reasoning
-
-  # Evaluate a specific task only
-  python eval.py batch --benchmark medbench-agent-95/ --task MedCOT
-
-  # Evaluate model responses from a JSONL file (compact or full format)
-  python eval.py batch --benchmark medbench-agent-95/ --responses-file my_model.jsonl --dut gpt-4o
-
-  # Evaluate model responses from a delimited TXT file
-  python eval.py batch --benchmark medbench-agent-95/ --responses-file my_model.txt --dut gpt-4o
-
-  # Evaluate model responses from a directory of per-sample .txt files
-  python eval.py batch --benchmark medbench-agent-95/ --responses-dir my_model_outputs/ --dut gpt-4o
-
-  # Judge single response
-  python eval.py single --task MedCOT --question "..." --response "..." --dut my-model
-
-  # Use minimax model as judge
-  python eval.py batch --benchmark medbench-agent-95/ --model minimax-m2.5
-
-Environment variables:
-  ANTHROPIC_API_KEY   Required for claude-haiku-4-5 (default judge model)
-  MINIMAX_API_KEY     Required for minimax-m2.5
+Default --benchmark is references/medbench-agent-95 (gold JSONL). Env: ANTHROPIC_API_KEY; see judge/llm_client.py.
 """
 
 import argparse
 import json
 import sys
 from pathlib import Path
+
+from judge.paths import DEFAULT_BENCHMARK_REL, default_benchmark_dir, resolve_benchmark_dir
 
 
 def _interactive_wizard() -> argparse.Namespace:
@@ -91,7 +69,8 @@ def _interactive_wizard() -> argparse.Namespace:
 
     # Step 4: Benchmark dir + output
     print("Step 4/4 — Paths & DUT responses")
-    benchmark_dir = input("  Benchmark dir [medbench-agent-95/]: ").strip() or "medbench-agent-95/"
+    _bd = input(f"  Benchmark dir [{DEFAULT_BENCHMARK_REL}/]: ").strip()
+    benchmark_dir = resolve_benchmark_dir(_bd or DEFAULT_BENCHMARK_REL)
     output_dir = input("  Output dir [results/]: ").strip() or "results/"
     print()
     print("  DUT responses input (leave blank to run gold-answer calibration):")
@@ -145,7 +124,7 @@ def _interactive_wizard() -> argparse.Namespace:
 
 def cmd_batch(args: argparse.Namespace) -> None:
     """Run batch evaluation over benchmark JSONL files."""
-    from judge.runner import run_benchmark
+    from judge.batch_runner import run_benchmark
     from judge.report import save_results, print_summary
 
     tasks = [args.task] if getattr(args, "task", None) else None
@@ -156,7 +135,7 @@ def cmd_batch(args: argparse.Namespace) -> None:
     has_responses = bool(args.responses_dir or responses_file)
 
     result = run_benchmark(
-        benchmark_dir=args.benchmark,
+        benchmark_dir=resolve_benchmark_dir(args.benchmark),
         tasks=tasks,
         capability=capability,
         model=args.model,
@@ -183,7 +162,7 @@ def cmd_batch(args: argparse.Namespace) -> None:
 
 def cmd_single(args: argparse.Namespace) -> None:
     """Judge a single response from command-line arguments."""
-    from judge.judge import judge_response
+    from judge.scoring import judge_response
 
     if not args.question or not args.response:
         print("ERROR: --question and --response are required for single evaluation", file=sys.stderr)
@@ -248,7 +227,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--model",
         default="claude-haiku-4-5",
-        choices=["claude-haiku-4-5", "minimax-m2.5"],
+        choices=["claude-haiku-4-5", "minimax-m2.5", "deepseek-chat"],
         help="Judge LLM to use (default: claude-haiku-4-5)",
     )
 
@@ -256,7 +235,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     # batch command
     batch = subparsers.add_parser("batch", help="Batch evaluate benchmark samples")
-    batch.add_argument("--benchmark", required=True, help="Path to medbench-agent-95/ directory")
+    batch.add_argument(
+        "--benchmark",
+        default=str(default_benchmark_dir()),
+        help=(
+            "Directory with MedBench JSONL files "
+            "(default: shipped references/medbench-agent-95)"
+        ),
+    )
     batch.add_argument(
         "--capability",
         choices=["reasoning", "long_context", "tool_use", "orchestration",

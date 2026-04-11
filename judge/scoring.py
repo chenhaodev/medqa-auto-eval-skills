@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from .rubrics import Rubric, get_rubric
-from .models import call_model, ModelResponse, DEFAULT_MODEL
+from .llm_client import call_model, ModelResponse, DEFAULT_MODEL
 
 
 @dataclass

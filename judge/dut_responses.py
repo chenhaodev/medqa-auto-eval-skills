@@ -3,7 +3,7 @@ Parse DUT (Device Under Test) responses from multiple input formats.
 
 Supported formats:
 
-  FORMAT 1 — Benchmark JSONL (same schema as medbench-agent-95/*.jsonl)
+  FORMAT 1 — Benchmark JSONL (same schema as references/medbench-agent-95/*.jsonl)
     Each line: {"question": "...", "answer": "<DUT response>", "other": {"id": 97, ...}}
     Use when: you have a full results directory matching the benchmark structure.
 
@@ -76,7 +76,7 @@ def parse_responses_text(text: str, default_task: str = "unknown") -> ParsedResp
 # ── Format 1: benchmark directory ────────────────────────────────────────────
 
 def _parse_benchmark_dir(directory: Path) -> ParsedResponses:
-    """Parse a directory of JSONL files (same schema as medbench-agent-95/)."""
+    """Parse a directory of JSONL files (same schema as references/medbench-agent-95/)."""
     result: ParsedResponses = {}
     for jsonl_path in sorted(directory.glob("*.jsonl")):
         task = jsonl_path.stem

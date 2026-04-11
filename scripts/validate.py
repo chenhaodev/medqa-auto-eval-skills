@@ -19,31 +19,39 @@ Metrics reported (both modes):
   discrimination   — % of samples where gold > model
   spearman_rho     — rank correlation between expected and actual score order
 
-Usage:
+Usage (from repository root):
   # Mode 1 — synthetic tiers
-  python validate.py --benchmark medbench-agent-95/ --task MedCOT --samples 5
-  python validate.py --benchmark medbench-agent-95/ --all-tasks --samples 3
+  python -m scripts.validate --task MedCOT --samples 5
+  python -m scripts.validate --all-tasks --samples 3
 
   # Mode 2 — real model comparison
-  python validate.py --benchmark medbench-agent-95/ --all-tasks --samples 5 \\
+  python -m scripts.validate --all-tasks --samples 5 \\
       --compare-dir results-gpt-4.1-20251216-score-81/MedBench_Agent \\
       --compare-name gpt-4.1 --compare-expected-score 81
+
+  Equivalent: python scripts/validate.py ... (same module).
 """
 
 import argparse
+import sys
+from pathlib import Path
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 import json
 import os
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
-from pathlib import Path
 from typing import Optional
 
-from judge.judge import judge_response
-from judge.models import DEFAULT_MODEL
+from judge.scoring import judge_response
+from judge.llm_client import DEFAULT_MODEL
+from judge.paths import default_benchmark_dir, resolve_benchmark_dir
 from judge.rubrics import list_tasks
-from judge.runner import _load_anchor_examples
-from judge.rag import GoldRAG
+from judge.batch_runner import _load_anchor_examples
+from judge.gold_retrieval import GoldAnchorIndex
 
 
 # Refusal string used for TIER-3 (minimal / off-task) test
@@ -301,8 +309,8 @@ def compare_task(
     selected_ids = common_ids[:n_samples]
     selected_id_set = set(selected_ids)
 
-    # Set up calibration: build RAG index or load static anchor pool once per task
-    rag_index: GoldRAG | None = None
+    # Set up calibration: build gold anchor index or load static anchor pool once per task
+    gold_anchor_index: GoldAnchorIndex | None = None
     anchor_examples_static: list[dict] | None = None
     if calibrate_n > 0:
         if calibrate_mode == "random":
@@ -313,12 +321,20 @@ def compare_task(
                 print(f"  [{task}] calibrating with {len(anchor_examples_static)} gold anchors (random)")
         else:
             try:
-                rag_index = GoldRAG(benchmark_dir, task, backend=calibrate_mode)
+                gold_anchor_index = GoldAnchorIndex(
+                    benchmark_dir, task, backend=calibrate_mode
+                )
                 if verbose:
-                    print(f"  [{task}] RAG index built ({calibrate_mode}, {len(rag_index)} samples)")
+                    print(
+                        f"  [{task}] gold anchor index ready ({calibrate_mode}, "
+                        f"{len(gold_anchor_index)} samples)"
+                    )
             except Exception as e:
                 if verbose:
-                    print(f"  [{task}] RAG init failed ({e}), falling back to random anchors")
+                    print(
+                        f"  [{task}] gold anchor index init failed ({e}), "
+                        f"falling back to random anchors"
+                    )
                 anchor_examples_static = _load_anchor_examples(
                     benchmark_dir, task, n=calibrate_n, seed=99, exclude_ids=selected_id_set
                 )
@@ -336,8 +352,8 @@ def compare_task(
         # Resolve per-sample anchor examples
         anchor_examples: list[dict] | None = None
         if calibrate_n > 0:
-            if rag_index is not None:
-                anchor_examples = rag_index.retrieve(
+            if gold_anchor_index is not None:
+                anchor_examples = gold_anchor_index.retrieve(
                     question=question,
                     n=calibrate_n,
                     exclude_ids={int(sample_id)},
@@ -349,7 +365,7 @@ def compare_task(
             print(f"  [id={sample_id}] judging gold / {model_name}...")
 
         # Pass anchor_examples into the judge via judge_response directly
-        from judge.judge import judge_response as _jr
+        from judge.scoring import judge_response as _jr
         try:
             gr = _jr(task, question, gold_answer, gold_answer, judge_model, "gold-calibrate", anchor_examples)
             gold_score = gr.normalized_score
@@ -502,7 +518,7 @@ def _write_compare_report(
         "**Gap ratio < 0.5x**: judge can't distinguish gold from DUT → rubric anchors need sharpening.",
         "**Discrimination < 80%**: judge ranks DUT above gold on >20% of samples → calibration needed.",
         "",
-        "To optimize: run `/autoresearch` with metric=discrimination_rate, scope=judge/rubrics.py+judge/judge.py",
+        "To optimize: run `/autoresearch` with metric=discrimination_rate, scope=judge/rubrics.py+judge/scoring.py",
     ]
 
     report_path = out_dir / "compare-report.md"
@@ -610,8 +626,8 @@ def _write_report(out_dir: Path, alignments: list[TaskAlignment], model: str) ->
         "  → Add to SYSTEM_PROMPT: 'Refusing to answer when a clinical answer is required scores 1.'",
         "",
         "If **discrimination < 80% or ρ < 0.7**: systemic alignment failure.",
-        "  → Run `/autoresearch` with goal='maximize validate.py alignment score' and",
-        "    scope='judge/judge.py SYSTEM_PROMPT and judge/rubrics.py criteria anchors'.",
+        "  → Run `/autoresearch` with goal='maximize scripts.validate alignment score' and",
+        "    scope='judge/scoring.py SYSTEM_PROMPT and judge/rubrics.py criteria anchors'.",
     ]
 
     report_path = out_dir / "validate-report.md"
@@ -623,7 +639,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Validate LLM-as-judge alignment with human gold answers"
     )
-    parser.add_argument("--benchmark", default="medbench-agent-95", help="Benchmark directory")
+    parser.add_argument(
+        "--benchmark",
+        default=str(default_benchmark_dir()),
+        help="Benchmark directory (default: references/medbench-agent-95)",
+    )
     parser.add_argument("--task", help="Single task to validate (e.g. MedCOT)")
     parser.add_argument("--all-tasks", action="store_true", help="Validate all 13 tasks")
     parser.add_argument("--samples", type=int, default=5, help="Samples per task (default 5)")
@@ -655,14 +675,14 @@ def main() -> None:
         help=(
             "How to select calibration anchor examples. "
             "'random' (default) uses a fixed seed per task. "
-            "'bm25' or 'embedding' use semantic retrieval (GoldRAG) to pick "
+            "'bm25' or 'embedding' use semantic retrieval (GoldAnchorIndex) to pick "
             "the most similar gold examples per question. "
             "Requires --calibrate-n > 0."
         ),
     )
     args = parser.parse_args()
 
-    benchmark_dir = Path(args.benchmark)
+    benchmark_dir = Path(resolve_benchmark_dir(args.benchmark))
     if not benchmark_dir.exists():
         raise SystemExit(f"Benchmark directory not found: {benchmark_dir}")
 
