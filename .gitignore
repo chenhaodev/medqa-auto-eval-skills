@@ -32,6 +32,11 @@ validate-*/
 .env
 *.key
 
+# Coverage (pytest-cov / coverage.py)
+.coverage
+coverage.json
+htmlcov/
+
 # IDE
 .vscode/
 .idea/

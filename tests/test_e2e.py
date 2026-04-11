@@ -109,3 +109,158 @@ def test_sample_benchmark_lines_are_valid_json(task_file: str) -> None:
         first = next(line for line in f if line.strip())
     data = json.loads(first)
     assert "question" in data and "answer" in data
+
+
+def test_eval_batch_help_exits_zero() -> None:
+    proc = _run([sys.executable, "eval.py", "batch", "--help"])
+    assert proc.returncode == 0, proc.stderr
+    assert "benchmark" in (proc.stdout + proc.stderr).lower()
+
+
+def test_eval_single_missing_args_exits_nonzero() -> None:
+    proc = _run(
+        [
+            sys.executable,
+            "eval.py",
+            "single",
+            "--task",
+            "MedCOT",
+            "--dut",
+            "x",
+        ]
+    )
+    assert proc.returncode != 0
+
+
+def test_resolve_benchmark_dir_none_is_default() -> None:
+    from judge.refs import default_benchmark_dir, resolve_benchmark_dir
+
+    assert resolve_benchmark_dir(None) == str(default_benchmark_dir())
+
+
+def test_resolve_benchmark_dir_empty_string_is_default() -> None:
+    from judge.refs import default_benchmark_dir, resolve_benchmark_dir
+
+    assert resolve_benchmark_dir("") == str(default_benchmark_dir())
+
+
+def test_repo_root_contains_pyproject() -> None:
+    from judge.refs import repo_root
+
+    assert (repo_root() / "pyproject.toml").is_file()
+
+
+def test_list_tasks_has_thirteen() -> None:
+    from judge.refs import list_tasks
+
+    assert len(list_tasks()) == 13
+
+
+def test_get_rubric_medcot_has_five_criteria() -> None:
+    from judge.refs import get_rubric
+
+    r = get_rubric("MedCOT")
+    assert r.task == "MedCOT"
+    assert len(r.criteria) == 5
+
+
+def test_get_rubric_unknown_raises() -> None:
+    from judge.refs import get_rubric
+
+    with pytest.raises(ValueError, match="Unknown task"):
+        get_rubric("NotATask")
+
+
+def test_get_tasks_for_capability_reasoning() -> None:
+    from judge.refs import get_tasks_for_capability
+
+    tasks = get_tasks_for_capability("reasoning")
+    assert tasks == ("MedCOT", "MedDecomp", "MedPathPlan")
+
+
+def test_capability_groups_include_expected_keys() -> None:
+    from judge.refs import CAPABILITY_GROUPS
+
+    for key in ("reasoning", "full", "safety", "tool_use"):
+        assert key in CAPABILITY_GROUPS
+
+
+def test_rubric_subtitles_cover_doc_order() -> None:
+    from judge.refs import RUBRIC_DOC_ORDER, RUBRIC_SUBTITLE
+
+    for task in RUBRIC_DOC_ORDER:
+        assert task in RUBRIC_SUBTITLE
+
+
+def test_write_rubrics_markdown_to_tmp_path(tmp_path: Path) -> None:
+    from judge.refs import write_rubrics_markdown
+
+    out = tmp_path / "rubrics-out.md"
+    write_rubrics_markdown(out_path=out)
+    text = out.read_text(encoding="utf-8")
+    assert text.startswith("# MedBench-Eval Task Rubrics")
+    assert "MedCOT" in text
+
+
+def test_parse_responses_compact_jsonl_file(tmp_path: Path) -> None:
+    from judge.runner import parse_responses
+
+    p = tmp_path / "dut.jsonl"
+    p.write_text(
+        '{"task": "MedCOT", "id": 1, "response": "hello"}\n',
+        encoding="utf-8",
+    )
+    got = parse_responses(p)
+    assert got["MedCOT"][1] == "hello"
+
+
+def test_parse_responses_delimited_txt_file(tmp_path: Path) -> None:
+    from judge.runner import parse_responses
+
+    p = tmp_path / "dut.txt"
+    p.write_text(
+        "=== MedCOT | 42 ===\nline one\nline two\n=== MedShield | 7 ===\nok\n",
+        encoding="utf-8",
+    )
+    got = parse_responses(p)
+    assert got["MedCOT"][42].startswith("line one")
+    assert got["MedShield"][7].strip() == "ok"
+
+
+def test_responses_to_jsonl_contains_task_id() -> None:
+    from judge.runner import responses_to_jsonl
+
+    blob = responses_to_jsonl({"MedCOT": {9: "abc"}})
+    assert '"task": "MedCOT"' in blob
+    assert '"id": 9' in blob
+
+
+def test_gold_anchor_retrieve_respects_max_n() -> None:
+    from judge.refs import default_benchmark_dir
+    from judge.runner import GoldAnchorIndex
+
+    idx = GoldAnchorIndex(default_benchmark_dir(), task="MedCOT", backend="bm25")
+    got = idx.retrieve(question="高血压诊疗", n=2, exclude_ids=set())
+    assert len(got) <= 2
+    assert all("question" in x and "answer" in x for x in got)
+
+
+def test_runner_benchmark_tasks_count() -> None:
+    from judge.runner import BENCHMARK_TASKS
+
+    assert len(BENCHMARK_TASKS) == 13
+
+
+def test_llm_client_default_model_string() -> None:
+    from judge.llm_client import DEFAULT_MODEL
+
+    assert isinstance(DEFAULT_MODEL, str)
+    assert len(DEFAULT_MODEL) > 0
+
+
+def test_llm_client_available_models_non_empty() -> None:
+    from judge.llm_client import available_models
+
+    names = available_models()
+    assert isinstance(names, list)
+    assert len(names) >= 3
