@@ -2,10 +2,12 @@
 """medbench-eval: LLM-as-judge on MedBench-Agent-95.
 
   python eval.py
+  python eval.py generate -o generated/dut/ --task MedCOT --answer-model deepseek-chat
   python eval.py batch --capability reasoning --dut NAME ...
   python eval.py single --task MedCOT --question ... --response ... --dut NAME
 
-Default --benchmark is references/medbench-agent-95 (gold JSONL). Env: ANTHROPIC_API_KEY; see judge/llm_client.py.
+Default --benchmark is references/medbench-agent-95 (gold JSONL).
+Env: DEEPSEEK_API_KEY for answers; ANTHROPIC_API_KEY for default judge — see judge/llm_client.py.
 """
 
 import argparse
@@ -198,6 +200,13 @@ def cmd_single(args: argparse.Namespace) -> None:
     print(json.dumps(output, indent=2, ensure_ascii=False))
 
 
+def cmd_generate(args: argparse.Namespace) -> None:
+    """Generate DUT JSONL with an answer model (e.g. DeepSeek), then use batch to judge."""
+    from judge.generate_dut import run_generate
+
+    run_generate(args)
+
+
 def cmd_list_tasks(args: argparse.Namespace) -> None:
     """List all supported tasks and capability groups."""
     from judge.refs import RUBRICS, list_capabilities
@@ -296,6 +305,15 @@ def build_parser() -> argparse.ArgumentParser:
     # tasks command
     subparsers.add_parser("tasks", help="List all supported tasks and capability groups")
 
+    # generate command (answer model → JSONL for batch)
+    from judge.generate_dut import add_generate_arguments
+
+    gen = subparsers.add_parser(
+        "generate",
+        help="Generate DUT answers with an LLM (default DeepSeek); write JSONL for batch",
+    )
+    add_generate_arguments(gen)
+
     return parser
 
 
@@ -319,6 +337,8 @@ def main() -> None:
         cmd_single(args)
     elif args.command == "tasks":
         cmd_list_tasks(args)
+    elif args.command == "generate":
+        cmd_generate(args)
     else:
         parser.print_help()
 

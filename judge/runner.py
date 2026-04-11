@@ -434,6 +434,11 @@ def _load_task_samples(benchmark_dir: Path, task: str) -> list[dict]:
     return samples
 
 
+def load_task_jsonl_samples(benchmark_dir: Union[str, Path], task: str) -> list[dict]:
+    """Load all records from ``benchmark_dir / f'{task}.jsonl'``."""
+    return _load_task_samples(Path(benchmark_dir), task)
+
+
 def run_benchmark(
     benchmark_dir: str,
     tasks: Optional[list[str]] = None,

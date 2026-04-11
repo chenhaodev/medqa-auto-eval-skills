@@ -51,7 +51,7 @@ Execute **in order**. Assume the shell’s cwd is the repository root.
 | 2 | Install **uv** if missing | `curl -LsSf https://astral.sh/uv/install.sh \| sh` — then ensure `uv` is on `PATH` (often `~/.local/bin`). |
 | 3 | Install deps + dev | `uv sync --group dev` |
 | 4 | Configure secrets | Create `.env` with at least `ANTHROPIC_API_KEY=...` |
-| 5 | Verify (no paid API calls in these checks) | `uv run --group dev pytest tests/ -q` then `python -m scripts.validate --help` and `python eval.py tasks` |
+| 5 | Verify (no paid API calls in these checks) | `uv run --group dev pytest tests/ -q` then `python -m scripts.validate --help`, `python eval.py tasks`, and `python eval.py generate --help` |
 | 6 | Run real judging | Needs a valid key — see **[Run evaluations](#run-evaluations)** |
 
 For conversational scoring conventions (wizard flow, rubric names, output template), read **`SKILL.md`**. This README does not duplicate that protocol.
@@ -82,6 +82,18 @@ python eval.py batch \
 
 - **`--benchmark`** defaults to the shipped gold data: `references/medbench-agent-95/`.
 - **Outputs** under `--output`: `summary.json`, `details.jsonl`, `report.md`.
+
+### 2b. Generate answers (DeepSeek, etc.) then batch-judge
+
+Use an **answer model** (default `deepseek-chat`; set `DEEPSEEK_API_KEY` in `.env`) to answer gold questions. By default, repo **`SKILL.md`** is injected as **system** context (use `--no-skill` to disable). Sample selection matches **`eval.py batch`** when you use the same **`--samples`** and **`--seed`**.
+
+```bash
+python eval.py generate -o generated/dut/ --task MedCOT --samples 3 --seed 42 --answer-model deepseek-chat
+python eval.py batch --task MedCOT --dut deepseek-chat \
+  --responses-file generated/dut/MedCOT.jsonl --samples 3 --seed 42 --output results/ds-001/
+```
+
+Judge model is still **`--model`** on `batch` (default Haiku); configure `ANTHROPIC_API_KEY` unless you pass `--model minimax-m2.5` / `deepseek-chat`.
 
 ### 3. Single item (one question + one response)
 
