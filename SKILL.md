@@ -14,17 +14,18 @@ description: >
 
 Evaluate any LLM's clinical responses against MedBench-Agent-95 (390 gold-standard samples, 13 task categories). Scores are 0-100, normalized from task-specific 5-point Likert rubrics. The judge is robust to minor surface errors — only clinical substance affects scores.
 
-**Rubric details:** See `references/rubrics.md` for per-criterion Score 1/5 anchors. Load it when you need the full table for a specific task.
+**Rubric details:** Always load `references/rubrics.md` before scoring any response. It contains the per-criterion Score 1/5 anchors for every task — without it you'll invent criteria names and get the wrong scale.
 
 ---
 
 ## Step 0 — Interactive Wizard (when invoked without parameters)
 
-If `/medbench-eval` is called bare (no `Task`, `Question`, or `Capability` given), guide the user through 4 questions:
+If `/medbench-eval` is called bare (no `Task`, `Question`, or `Capability` given), run a **strictly sequential** wizard — ask one question, wait for the answer, then ask the next. Never dump all questions at once.
 
-**Q1 — DUT:** "What model or system are you evaluating? (e.g. gpt-4o, claude-opus-4-6, my-fine-tuned-model)"
+**Q1 — DUT (ask this alone, then stop and wait):**
+> What model or system are you evaluating? (e.g. gpt-4o, claude-opus-4-6, my-fine-tuned-model)
 
-**Q2 — Capability:** Present this menu and ask for a selection:
+**Q2 — Capability (only after user answers Q1, present this menu):**
 ```
 [1] Clinical Reasoning      — MedCOT, MedDecomp, MedPathPlan
 [2] Long-context            — MedLongQA, MedLongConv
@@ -36,13 +37,13 @@ If `/medbench-eval` is called bare (no `Task`, `Question`, or `Capability` given
 [8] Full Benchmark (all 13) — all tasks
 ```
 
-**Q3 — Sample count:** "Quick (3) / Standard (5) / Thorough (10) / Full (30) samples per task?"
+**Q3 — Sample count (only after Q2 answer):** Quick (3) / Standard (5) / Thorough (10) / Full (30) samples per task?
 
-**Q4 — Mode:**
+**Q4 — Mode (only after Q3 answer):**
 - "Paste a response to evaluate now" → collect Question + Response inline, proceed to single eval
 - "Batch eval over a benchmark directory" → ask for `BatchDir`, `ResponsesDir` (optional), `Output`
 
-Confirm the configuration, then proceed.
+Confirm the full configuration, then proceed.
 
 ---
 
@@ -149,9 +150,11 @@ If `Capability` given, map it to tasks:
 
 For batch mode, run: `python eval.py batch --benchmark {BatchDir} --capability {key} --dut {DUT} ...`
 
-### Step 2 — Score criteria (SUBSTANCE over STYLE)
+### Step 2 — Load rubric and score criteria (SUBSTANCE over STYLE)
 
-For each criterion in the task rubric (see `references/rubrics.md`):
+Read `references/rubrics.md` now — find the section for your task to get the exact criterion names and 1/5 anchors. Do not guess or invent criteria names.
+
+For each criterion in the task rubric:
 
 Score 1-5 based on **clinical substance only**. The gold answer is a calibration reference — not a required template.
 
