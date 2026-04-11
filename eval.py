@@ -201,10 +201,10 @@ def cmd_single(args: argparse.Namespace) -> None:
 
 
 def cmd_generate(args: argparse.Namespace) -> None:
-    """Generate DUT JSONL with an answer model (e.g. DeepSeek), then use batch to judge."""
-    from judge.generate_dut import run_generate
+    """Generate answer JSONL with an answer model (e.g. DeepSeek), then use batch to judge."""
+    from judge.generate_answers import run_generate_answers
 
-    run_generate(args)
+    run_generate_answers(args)
 
 
 def cmd_list_tasks(args: argparse.Namespace) -> None:
@@ -306,13 +306,13 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("tasks", help="List all supported tasks and capability groups")
 
     # generate command (answer model → JSONL for batch)
-    from judge.generate_dut import add_generate_arguments
+    from judge.generate_answers import add_generate_answers_arguments
 
     gen = subparsers.add_parser(
         "generate",
-        help="Generate DUT answers with an LLM (default DeepSeek); write JSONL for batch",
+        help="Generate benchmark answers with an LLM (default DeepSeek); write JSONL for batch",
     )
-    add_generate_arguments(gen)
+    add_generate_answers_arguments(gen)
 
     return parser
 

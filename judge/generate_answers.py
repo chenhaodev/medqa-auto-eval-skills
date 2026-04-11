@@ -1,5 +1,5 @@
 """
-Generate DUT answers with an LLM (e.g. DeepSeek), then score with ``eval.py batch``.
+Generate benchmark answers with an LLM (e.g. DeepSeek), then score with ``eval.py batch``.
 
 Uses the same sample selection as ``run_benchmark`` (seeded random subset) so
 ``--samples`` / ``--seed`` align with a follow-up ``eval.py batch`` call.
@@ -69,7 +69,7 @@ def generate_jsonl_for_task(
     delay_seconds: float,
     verbose: bool,
 ) -> list[dict]:
-    """Return one JSON object per line (same schema as gold JSONL, ``answer`` = DUT)."""
+    """Return one JSON object per line (same schema as gold JSONL, ``answer`` = model)."""
     bench = Path(benchmark_dir)
     samples = load_task_jsonl_samples(bench, task)
     if not samples:
@@ -109,7 +109,7 @@ def generate_jsonl_for_task(
     return out
 
 
-def run_generate(args: argparse.Namespace) -> None:
+def run_generate_answers(args: argparse.Namespace) -> None:
     benchmark_path = Path(resolve_benchmark_dir(args.benchmark))
     if not benchmark_path.is_dir():
         print(f"ERROR: benchmark dir not found: {benchmark_path}", file=sys.stderr)
@@ -169,8 +169,8 @@ def run_generate(args: argparse.Namespace) -> None:
         )
 
 
-def add_generate_arguments(p: argparse.ArgumentParser) -> None:
-    """CLI flags for ``eval.py generate`` and ``python -m judge.generate_dut``."""
+def add_generate_answers_arguments(p: argparse.ArgumentParser) -> None:
+    """CLI flags for ``eval.py generate`` and ``python -m judge.generate_answers``."""
     p.add_argument(
         "--benchmark",
         default=str(default_benchmark_dir()),
@@ -241,22 +241,22 @@ def add_generate_arguments(p: argparse.ArgumentParser) -> None:
     p.add_argument("--quiet", action="store_true")
 
 
-def build_generate_parser() -> argparse.ArgumentParser:
+def build_generate_answers_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description=(
-            "Generate DUT answers with an answer model (default: DeepSeek), "
+            "Generate benchmark answers with an answer model (default: DeepSeek), "
             "optionally injecting SKILL.md as system context. "
             "Writes per-task JSONL compatible with eval.py batch --responses-file."
         ),
     )
-    add_generate_arguments(p)
+    add_generate_answers_arguments(p)
     return p
 
 
 def main(argv: Optional[list[str]] = None) -> None:
-    parser = build_generate_parser()
+    parser = build_generate_answers_parser()
     args = parser.parse_args(argv)
-    run_generate(args)
+    run_generate_answers(args)
 
 
 if __name__ == "__main__":

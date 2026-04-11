@@ -1,8 +1,8 @@
-"""Offline tests for DUT answer generation helpers."""
+"""Offline tests for benchmark answer generation helpers."""
 
 from __future__ import annotations
 
-from judge.generate_dut import build_answer_system, strip_yaml_frontmatter
+from judge.generate_answers import build_answer_system, strip_yaml_frontmatter
 
 
 def test_strip_yaml_frontmatter_removes_block() -> None:
