@@ -94,62 +94,97 @@ RUBRICS: dict[str, Rubric] = {
 
     "MedCollab": Rubric(
         task="MedCollab",
-        description="Multi-system medical collaboration orchestration. Evaluate task decomposition, system coordination, and workflow completeness.",
+        description=(
+            "Multi-agent medical orchestration. The response should demonstrate actual "
+            "multi-agent collaboration: naming each agent, showing what it receives and produces, "
+            "and integrating outputs into a coordinated clinical decision. "
+            "A response that only lists steps without showing agent interactions scores lower "
+            "than one that shows each agent acting, producing output, and handing off to the next."
+        ),
         criteria=[
             Criterion(
-                name="task_decomposition",
-                description="Complex medical goal is appropriately broken into concrete sub-tasks",
-                score_1="No decomposition; monolithic response that cannot be executed",
-                score_5="Optimal decomposition into atomic, assignable sub-tasks with clear boundaries",
+                name="agent_interaction_depth",
+                description=(
+                    "How explicitly the response shows each agent acting and producing output, "
+                    "versus merely describing what agents should do"
+                ),
+                score_1=(
+                    "Step list only — describes a plan without showing any agent outputs or "
+                    "interactions; could have been written without multi-agent architecture"
+                ),
+                score_5=(
+                    "Each named agent explicitly produces output (data, decisions, summaries); "
+                    "the coordinating agent integrates those outputs before routing to the next; "
+                    "parallel or sequential execution is visible in the response structure"
+                ),
             ),
             Criterion(
-                name="system_coordination",
-                description="Appropriate systems/tools assigned to each sub-task",
-                score_1="Wrong systems assigned; mismatch between task requirements and selected systems",
-                score_5="Each sub-task assigned to the most appropriate system with clear interface specification",
+                name="task_decomposition",
+                description="Complex medical goal is broken into appropriate sub-tasks, each assigned to a named agent",
+                score_1="No decomposition; monolithic response or vague steps with no agent assignment",
+                score_5="Optimal decomposition: each sub-task has a named agent owner with clear scope and handoff logic",
             ),
             Criterion(
                 name="workflow_logic",
-                description="Sub-tasks are ordered logically with correct dependencies identified",
-                score_1="Random ordering; ignores dependencies; parallel tasks sequenced unnecessarily",
-                score_5="Optimal workflow graph with correct sequencing, parallelism where possible, and dependency management",
+                description="Sub-tasks follow correct clinical dependencies; parallelism used where possible",
+                score_1="Random ordering; ignores clinical dependencies; fully sequential when parallel is possible",
+                score_5="Optimal workflow with correct sequencing, parallelism demonstrated where clinically appropriate",
             ),
             Criterion(
-                name="completeness",
-                description="All collaboration steps required to achieve the goal are included",
-                score_1="Missing critical collaboration steps; goal cannot be achieved",
-                score_5="All necessary steps present; goal fully achievable following the plan",
+                name="clinical_correctness",
+                description="Clinical decisions embedded in the orchestration are medically correct and safe",
+                score_1="Clinically incorrect decisions (wrong diagnosis, wrong drug, unsafe timing) in the orchestration",
+                score_5="All clinical decisions throughout are evidence-based, appropriate, and lead to a correct outcome",
             ),
         ],
     ),
 
     "MedDBOps": Rubric(
         task="MedDBOps",
-        description="Medical database query and operation generation. Evaluate query correctness, clinical alignment, and efficiency.",
+        description=(
+            "Medical database multi-step operation. This task requires not only generating "
+            "correct queries but also demonstrating the full operation workflow: "
+            "data retrieval, validation, transformation, write-back or reporting, and "
+            "error/edge-case handling. A single correct SELECT is insufficient if the clinical "
+            "operation requires a transaction, constraint check, or multi-table join."
+        ),
         criteria=[
             Criterion(
                 name="query_correctness",
-                description="Query is syntactically valid and semantically correct",
-                score_1="Query has syntax errors or would produce wrong results",
-                score_5="Query is valid, executes correctly, and produces exactly the required results",
+                description="All queries/operations are syntactically valid and semantically correct for the target DB schema",
+                score_1="Queries have syntax errors, wrong table/column names, or would produce incorrect results",
+                score_5=(
+                    "Every query is syntactically valid, uses correct schema references, "
+                    "and would produce exactly the required results including edge cases"
+                ),
             ),
             Criterion(
                 name="clinical_alignment",
-                description="Query correctly captures the clinical data requirement",
-                score_1="Query retrieves wrong data; misses key clinical conditions",
-                score_5="Query perfectly captures all clinical constraints and retrieves exactly the needed data",
+                description="Operations correctly capture all clinical data requirements including filters, time ranges, and patient-level constraints",
+                score_1="Operations retrieve wrong data or miss key clinical filters (e.g. wrong date range, missing patient ID)",
+                score_5=(
+                    "Operations precisely capture all clinical constraints: patient scope, "
+                    "time range, diagnosis codes, medication filters, and result thresholds — "
+                    "no clinically important data is missing or incorrect"
+                ),
             ),
             Criterion(
-                name="efficiency",
-                description="Query is reasonably efficient; avoids unnecessary complexity",
-                score_1="Extremely inefficient; would cause significant performance issues on clinical data",
-                score_5="Optimal query design with appropriate indexes, joins, and filtering",
+                name="operation_completeness",
+                description="Full operation workflow is shown: not just retrieval but also any required validation, transformation, and write-back or reporting steps",
+                score_1="Only a single query shown; multi-step clinical operation is incomplete; side effects or write-backs missing",
+                score_5=(
+                    "Complete multi-step operation: retrieval → validation/check → transformation → "
+                    "write-back or report generation, with transaction boundaries and rollback logic where needed"
+                ),
             ),
             Criterion(
-                name="data_integrity",
-                description="Appropriate constraints and conditions to protect data integrity",
-                score_1="No integrity constraints; could corrupt or expose sensitive patient data",
-                score_5="Proper constraints, transactions, and access controls to ensure data integrity and privacy",
+                name="data_safety",
+                description="Operations protect data integrity: appropriate WHERE clauses, transactions, access controls, and no unintended data mutation",
+                score_1="Missing WHERE clauses on UPDATE/DELETE; no transaction; could corrupt or expose patient data",
+                score_5=(
+                    "All write operations scoped with correct WHERE clauses; wrapped in transactions; "
+                    "sensitive data access controlled; audit logging or rollback logic included"
+                ),
             ),
         ],
     ),

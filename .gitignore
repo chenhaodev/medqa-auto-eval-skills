@@ -16,7 +16,10 @@ env/
 
 # Results & outputs (generated, not committed)
 results/
+results-*/
 outputs/
+validate/
+validate-*/
 
 # macOS
 .DS_Store

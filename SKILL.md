@@ -56,11 +56,14 @@ Confirm the configuration, then proceed.
 | `Question` | Single-eval | The clinical question or scenario text |
 | `Response` | Single-eval | The model response to evaluate |
 | `Gold` | No | Gold standard answer — improves judge calibration |
-| `Model` | No | Judge model: `claude-haiku-4-5` (default) or `minimax-m2.5` |
+| `Model` | No | Judge model: `claude-haiku-4-5` (default), `minimax-m2.5`, or `deepseek-chat` |
 | `Mode` | No | `single` (default) or `batch` |
 | `BatchDir` | Batch mode | Path to `medbench-agent-95/` directory |
 | `ResponsesDir` | Batch mode | Dir with model outputs (`{ResponsesDir}/{Task}/{sample_id}.txt`) |
+| `ResponsesFile` | Batch mode | Single file with all responses — compact JSONL, full benchmark JSONL, or delimited TXT |
 | `SamplesPerTask` | Batch mode | Samples per task, default 5 |
+| `CalibrateN` | No | Show N gold examples before each evaluation (few-shot calibration). Recommended: 2 for MedCollab, MedDBOps, MedShield |
+| `CalibrateMode` | No | `random` (default), `bm25` (semantic BM25, zero deps), or `embedding` (BAAI/bge-m3 via SiliconFlow) |
 | `Output` | Batch mode | Output directory for results |
 
 ---
@@ -98,11 +101,14 @@ Output: results/gold-ceiling/
 
 **Python CLI (batch / automation):**
 ```bash
-pip install anthropic && export ANTHROPIC_API_KEY=sk-ant-...
+# Set API key for preferred judge model
+export ANTHROPIC_API_KEY=sk-ant-...   # claude-haiku-4-5 (default)
+# or use .env with MINIMAX_API_KEY / DEEPSEEK_API_KEY
 
 python eval.py                        # interactive wizard
 python eval.py tasks                  # list capabilities & tasks
 
+# Batch with directory of responses
 python eval.py batch \
   --benchmark medbench-agent-95/ \
   --capability reasoning \
@@ -110,6 +116,16 @@ python eval.py batch \
   --responses-dir outputs/gpt-4o/ \
   --samples 5 --output results/
 
+# Batch from a single JSONL or delimited TXT file
+python eval.py batch \
+  --benchmark medbench-agent-95/ \
+  --task MedCollab \
+  --dut my-model \
+  --responses-file outputs/my-model.jsonl \
+  --calibrate-n 2 --calibrate-mode bm25 \
+  --output results/
+
+# Single response
 python eval.py single \
   --task MedCOT --dut my-model \
   --question "..." --response "..."

@@ -14,9 +14,11 @@ Evaluate any LLM's clinical capabilities across 13 agentic medical tasks using s
 
 - **Substance over style**: the judge ignores formatting, phrasing, and step ordering — only clinical correctness matters
 - **Task-specific rubrics**: each of the 13 tasks has 4-5 Likert criteria designed for that task's clinical requirements
+- **Few-shot calibration**: show the judge gold examples before each evaluation to anchor its understanding of score-5
+- **RAG-based calibration**: BM25 or embedding retrieval selects the most semantically similar gold examples per question
 - **Capability-first UX**: group tasks by what clinical capability you're testing, not by task name
 - **DUT tracking**: every evaluation report identifies the model under test alongside the judge model
-- **Model-agnostic judge**: supports `claude-haiku-4-5` (default) and `minimax-m2.5`
+- **Model-agnostic judge**: supports `claude-haiku-4-5`, `minimax-m2.5`, and `deepseek-chat`
 
 ---
 
@@ -27,7 +29,7 @@ Evaluate any LLM's clinical capabilities across 13 agentic medical tasks using s
 | Clinical Reasoning | MedCOT, MedDecomp, MedPathPlan | Differential diagnosis, task decomposition, treatment pathway planning |
 | Long-context Understanding | MedLongQA, MedLongConv | Long document Q&A, multi-turn conversation memory |
 | Agentic Tool Use | MedCallAPI, MedRetAPI, MedDBOps | API calls, knowledge retrieval, database queries |
-| Multi-system Orchestration | MedCollab | Coordinating multiple systems for complex medical goals |
+| Multi-system Orchestration | MedCollab | Coordinating multiple agents for complex medical goals |
 | Self-reflection | MedReflect | Identifying and correcting clinical errors |
 | Role Adaptation | MedRoleAdapt | Adapting communication to patient/nurse/physician roles |
 | Safety & Defense | MedShield, MedDefend | Refusing harmful requests, resisting adversarial inputs |
@@ -44,24 +46,21 @@ git clone https://github.com/YOUR_USERNAME/medqa-auto-eval-skills
 cd medqa-auto-eval-skills
 
 # 2. Install
-pip install anthropic
-export ANTHROPIC_API_KEY=sk-ant-...
+pip install -r requirements.txt
 
-# 3. Run the interactive wizard
+# 3. Set API key (choose one)
+export ANTHROPIC_API_KEY=sk-ant-...        # claude-haiku-4-5 (default)
+# or configure .env (see Installation)
+
+# 4. Run the interactive wizard
 python eval.py
 ```
-
-The wizard guides you through:
-1. Name the model you're evaluating (DUT)
-2. Select which clinical capability to test
-3. Choose sample count (Quick=3 / Standard=5 / Thorough=10 / Full=30)
-4. Confirm paths and start
 
 ---
 
 ## Installation
 
-**Requirements:** Python 3.11+
+**Requirements:** Python 3.11+, zero mandatory third-party packages for core functionality.
 
 ```bash
 pip install -r requirements.txt
@@ -72,7 +71,23 @@ pip install -r requirements.txt
 | Model | Env var | Notes |
 |-------|---------|-------|
 | `claude-haiku-4-5` (default) | `ANTHROPIC_API_KEY` | Fast, cost-effective |
-| `minimax-m2.5` | `MINIMAX_API_KEY` | Alternative judge model |
+| `minimax-m2.5` | `MINIMAX_API_KEY` + `MINIMAX_BASE_URL` | Via SiliconFlow — OpenAI-compatible |
+| `deepseek-chat` | `DEEPSEEK_API_KEY` + `DEEPSEEK_BASE_URL` | Via DeepSeek API — OpenAI-compatible |
+
+You can store all keys in a `.env` file at the project root:
+
+```ini
+# .env
+MINIMAX_API_KEY=sk-...
+MINIMAX_BASE_URL=https://api.siliconflow.cn/v1
+MINIMAX_MODEL=Pro/MiniMaxAI/MiniMax-M2.5
+
+DEEPSEEK_API_KEY=sk-...
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-chat
+```
+
+The `.env` file is loaded automatically at startup and is excluded from git.
 
 ---
 
@@ -84,12 +99,12 @@ pip install -r requirements.txt
 python eval.py
 ```
 
-Prompts for DUT name, capability group, sample count, and paths. No flags needed.
+Prompts for DUT name, capability group, sample count, response source, and paths.
 
-### Batch evaluation by capability
+### Batch evaluation
 
 ```bash
-# Evaluate clinical reasoning of a model
+# By capability group
 python eval.py batch \
   --benchmark medbench-agent-95/ \
   --capability reasoning \
@@ -98,15 +113,15 @@ python eval.py batch \
   --samples 5 \
   --output results/gpt-4o-reasoning/
 
-# Evaluate safety & defense
+# By single task
 python eval.py batch \
   --benchmark medbench-agent-95/ \
-  --capability safety \
-  --dut my-model-v2 \
-  --responses-dir outputs/my-model/ \
-  --output results/safety/
+  --task MedCollab \
+  --dut my-model \
+  --responses-file outputs/my-model.jsonl \
+  --output results/
 
-# Full benchmark (all 13 tasks)
+# Full benchmark
 python eval.py batch \
   --benchmark medbench-agent-95/ \
   --capability full \
@@ -114,6 +129,25 @@ python eval.py batch \
   --responses-dir outputs/opus/ \
   --samples 10 \
   --output results/opus-full/
+
+# Use minimax as judge instead of default claude-haiku-4-5
+python eval.py batch \
+  --benchmark medbench-agent-95/ \
+  --capability safety \
+  --dut my-model \
+  --responses-dir outputs/ \
+  --model minimax-m2.5 \
+  --output results/
+
+# With few-shot calibration (recommended for MedCollab, MedDBOps, MedShield)
+python eval.py batch \
+  --benchmark medbench-agent-95/ \
+  --task MedCollab \
+  --dut my-model \
+  --responses-dir outputs/ \
+  --calibrate-n 2 \
+  --calibrate-mode bm25 \
+  --output results/
 ```
 
 **Capability group keys:** `reasoning`, `long_context`, `tool_use`, `orchestration`, `self_correction`, `role_adapt`, `safety`, `full`
@@ -129,40 +163,98 @@ python eval.py single \
   --gold-answer "Step 1: Key features include fever, meningismus..."
 ```
 
-Output is JSON:
-```json
-{
-  "task": "MedCOT",
-  "dut": "my-model",
-  "judge_model": "claude-haiku-4-5",
-  "total_score": 4.2,
-  "normalized_score": 80.0,
-  "criteria": [...],
-  "overall_feedback": "Strong reasoning chain...",
-  "minor_errors": ["Used 'meningococcal' instead of 'Neisseria meningitidis'"],
-  "major_errors": []
-}
-```
-
-### Calibration baseline (gold answers)
-
-Evaluate the benchmark's gold answers to establish a score ceiling:
-
-```bash
-python eval.py batch \
-  --benchmark medbench-agent-95/ \
-  --capability full \
-  --samples 5 \
-  --output results/gold-ceiling/
-```
-
-Gold answers typically score 85-95/100 — use this as your upper bound.
+Output is JSON with per-criterion scores, minor/major errors, and overall feedback.
 
 ### List tasks and capabilities
 
 ```bash
 python eval.py tasks
 ```
+
+---
+
+## DUT Response Input Formats
+
+The `--responses-dir` or `--responses-file` flag accepts several formats:
+
+**Directory** (`--responses-dir`): one `.txt` per sample, organized by task and sample ID:
+```
+outputs/my-model/
+  MedCOT/97.txt
+  MedCOT/103.txt
+  MedCollab/10.txt
+```
+
+**Compact JSONL** (`--responses-file`): one record per line:
+```jsonl
+{"task": "MedCOT", "id": 97, "response": "..."}
+{"task": "MedCollab", "id": 10, "response": "..."}
+```
+
+**Full benchmark JSONL** (`--responses-file`): same schema as `medbench-agent-95/*.jsonl`:
+```jsonl
+{"question": "...", "answer": "...", "other": {"id": 97, "source": "MedCOT"}}
+```
+
+**Delimited TXT** (`--responses-file`): sections separated by a header line:
+```
+=== MedCOT | 97 ===
+The patient presents with...
+=== MedCollab | 10 ===
+Agent 1 (Diagnosis) receives...
+```
+
+---
+
+## Few-Shot Calibration
+
+The judge can be shown gold answer examples before each evaluation to anchor its score-5 understanding. This significantly improves alignment on tasks where the judge misunderstands the task type.
+
+```bash
+# Show 2 gold examples before each sample (random selection)
+python eval.py batch ... --calibrate-n 2
+
+# BM25 semantic retrieval — picks the most similar gold example per question
+python eval.py batch ... --calibrate-n 2 --calibrate-mode bm25
+
+# Embedding-based retrieval (needs MINIMAX_API_KEY for BAAI/bge-m3)
+python eval.py batch ... --calibrate-n 2 --calibrate-mode embedding
+```
+
+**When to use:**
+- `--calibrate-mode bm25` is recommended for MedCollab, MedDBOps, and MedShield — zero extra dependencies, uses character-level BM25 with CJK-aware tokenization
+- `--calibrate-mode random` (default) works well for most other tasks
+- `--calibrate-mode embedding` provides the highest quality retrieval but requires a SiliconFlow API key
+
+---
+
+## Judge Alignment Validation
+
+Before running a full evaluation, you can validate that the judge aligns with human expectations:
+
+```bash
+# Mode 1 — Synthetic tier test (does the judge distinguish gold from wrong answers?)
+python validate.py \
+  --benchmark medbench-agent-95/ \
+  --all-tasks --samples 5
+
+# Mode 2 — Real model comparison (does the judge reproduce the known human score gap?)
+python validate.py \
+  --benchmark medbench-agent-95/ \
+  --task MedCollab \
+  --compare-dir results-gpt-4.1/MedBench_Agent \
+  --compare-name gpt-4.1 --compare-expected-score 81 \
+  --samples 6 --calibrate-n 2 --calibrate-mode bm25
+```
+
+**Metrics reported:**
+
+| Metric | Target | Description |
+|--------|--------|-------------|
+| `ceiling_score` | ≥ 85 | Avg judge score on gold answers |
+| `discrimination_rate` | ≥ 80% | % of samples where gold beats DUT |
+| `spearman_rho` | ≥ 0.70 | Rank correlation of expected vs actual order |
+| `gap_ratio` | ~1.0× | Actual gap / expected gap |
 
 ---
 
@@ -190,7 +282,7 @@ The judge explicitly separates:
 - **Minor errors** (no score impact): different phrasing, formatting, step ordering, synonym terminology, extra correct detail
 - **Major errors** (score impact): wrong diagnosis, wrong drug/dose, missing safety-critical steps, incorrect lab interpretation, logical inconsistency
 
-Both lists appear in every evaluation result, giving you full transparency.
+Both lists appear in every evaluation result.
 
 ---
 
@@ -200,64 +292,9 @@ After a batch run, `--output results/` contains:
 
 | File | Description |
 |------|-------------|
-| `summary.json` | Structured summary with per-task stats, DUT, judge model, error counts |
+| `summary.json` | Per-task stats, DUT, judge model, error counts |
 | `details.jsonl` | One record per sample: scores, criteria, minor/major errors, token usage |
 | `report.md` | Human-readable markdown report with tables and per-criterion breakdown |
-
-Example `summary.json`:
-```json
-{
-  "meta": {
-    "timestamp": "2026-04-11T10:00:00Z",
-    "judge_model": "claude-haiku-4-5",
-    "dut": "gpt-4o",
-    "tasks_evaluated": ["MedCOT", "MedDecomp", "MedPathPlan"],
-    "total_samples": 15,
-    "total_minor_errors": 8,
-    "total_major_errors": 2
-  },
-  "overall": { "avg_score": 76.4 },
-  "tasks": {
-    "MedCOT": { "n": 5, "avg_score": 78.0, "criterion_means": {...} }
-  }
-}
-```
-
----
-
-## Providing Model Responses
-
-The `--responses-dir` should contain one `.txt` file per sample, organized by task and sample ID:
-
-```
-outputs/
-  my-model/
-    MedCOT/
-      97.txt        ← response for sample ID 97
-      103.txt
-    MedDecomp/
-      12.txt
-```
-
-Sample IDs come from the `other.id` field in each JSONL record. If a response file is missing, that sample is skipped and logged as an error.
-
-If `--responses-dir` is omitted, the benchmark's own gold answers are evaluated (useful for calibration).
-
----
-
-## Claude Code Skill
-
-Add this repo to Claude Code and use `/medbench-eval` directly in your session:
-
-```
-/medbench-eval
-```
-
-The skill (defined in `SKILL.md`) guides you through the same wizard interactively — no terminal needed. Claude acts as the judge inline for single-response evaluation, or delegates to the Python CLI for batch runs.
-
-**To install:**
-1. Add this repo's `SKILL.md` to your Claude Code skills directory, or
-2. Reference it via the Claude Code skills marketplace
 
 ---
 
@@ -267,18 +304,22 @@ The skill (defined in `SKILL.md`) guides you through the same wizard interactive
 medqa-auto-eval-skills/
 ├── README.md
 ├── SKILL.md                    ← Claude Code /medbench-eval skill
-├── eval.py                     ← CLI entry point (interactive wizard + subcommands)
+├── eval.py                     ← CLI entry point (wizard + batch + single)
+├── validate.py                 ← Judge alignment validation (synthetic tiers & real model compare)
 ├── requirements.txt
 ├── judge/
 │   ├── capabilities.py         ← 8 capability groups → task mapping
 │   ├── rubrics.py              ← 13 task rubrics (57 criteria total)
 │   ├── judge.py                ← LLM-as-judge core + robustness policy
-│   ├── models.py               ← claude-haiku-4-5 / minimax-m2.5 abstraction
+│   ├── models.py               ← claude-haiku-4-5 / minimax-m2.5 / deepseek-chat abstraction
 │   ├── runner.py               ← batch evaluation loop
+│   ├── input_parser.py         ← DUT response parser (directory / JSONL / delimited TXT)
+│   ├── rag.py                  ← BM25 + embedding retrieval for calibration anchors
 │   └── report.py               ← JSON + markdown report generation
+├── references/
+│   └── rubrics.md              ← Full rubric table (for Claude Code skill use)
 └── medbench-agent-95/          ← benchmark data (390 samples, 13 tasks)
     ├── MedCOT.jsonl + .md
-    ├── MedCallAPI.jsonl + .md
     └── ... (13 tasks × 30 samples each)
 ```
 
@@ -292,8 +333,8 @@ Each task is evaluated on 4-5 criteria. Summary:
 |------|----------|
 | MedCOT | step_completeness, clinical_accuracy, differential_diagnosis_quality, evidence_integration, conclusion_clarity |
 | MedCallAPI | api_selection, parameter_completeness, format_correctness, error_handling |
-| MedCollab | task_decomposition, system_coordination, workflow_logic, completeness |
-| MedDBOps | query_correctness, clinical_alignment, efficiency, data_integrity |
+| MedCollab | agent_interaction_depth, task_decomposition, workflow_logic, clinical_correctness |
+| MedDBOps | query_correctness, clinical_alignment, operation_completeness, data_safety |
 | MedDecomp | completeness, logical_ordering, granularity, clinical_feasibility |
 | MedDefend | adversarial_detection, refusal_quality, safety_rationale, safe_alternative |
 | MedLongConv | memory_accuracy, consistency, clinical_continuity, response_relevance |
@@ -304,7 +345,7 @@ Each task is evaluated on 4-5 criteria. Summary:
 | MedRoleAdapt | role_fidelity, communication_style, clinical_accuracy, empathy_professionalism |
 | MedShield | risk_recognition, intervention_timeliness, intervention_appropriateness, harm_prevention_effectiveness |
 
-Full criterion definitions (with score-1 and score-5 anchors) are in `judge/rubrics.py`.
+Full criterion definitions (with score-1 and score-5 anchors) are in `judge/rubrics.py` and `references/rubrics.md`.
 
 ---
 
@@ -316,7 +357,17 @@ The `medbench-agent-95/` directory contains 390 samples from the [MedBench](http
 - `answer`: gold standard response
 - `other`: metadata (`id`, `source`)
 
-The benchmark covers agentic medical tasks (not simple MCQ) and uses LLM-as-judge as the primary evaluation methodology — making this repo the natural evaluation harness for it.
+---
+
+## Claude Code Skill
+
+Add this repo to Claude Code and use `/medbench-eval` directly in your session:
+
+```
+/medbench-eval
+```
+
+The skill (defined in `SKILL.md`) guides you through the same wizard interactively. Claude acts as the judge inline for single-response evaluation, or delegates to the Python CLI for batch runs.
 
 ---
 
@@ -326,7 +377,6 @@ Contributions welcome:
 - **New task rubrics** — add to `judge/rubrics.py` and `judge/capabilities.py`
 - **New judge models** — add a backend to `judge/models.py`
 - **Benchmark extensions** — add JSONL files to `medbench-agent-95/`
-- **Bug reports** — open an issue
 
 ---
 

@@ -12,7 +12,13 @@ Usage:
   # Evaluate a specific task only
   python eval.py batch --benchmark medbench-agent-95/ --task MedCOT
 
-  # Evaluate model responses from a directory
+  # Evaluate model responses from a JSONL file (compact or full format)
+  python eval.py batch --benchmark medbench-agent-95/ --responses-file my_model.jsonl --dut gpt-4o
+
+  # Evaluate model responses from a delimited TXT file
+  python eval.py batch --benchmark medbench-agent-95/ --responses-file my_model.txt --dut gpt-4o
+
+  # Evaluate model responses from a directory of per-sample .txt files
   python eval.py batch --benchmark medbench-agent-95/ --responses-dir my_model_outputs/ --dut gpt-4o
 
   # Judge single response
@@ -84,20 +90,32 @@ def _interactive_wizard() -> argparse.Namespace:
     print()
 
     # Step 4: Benchmark dir + output
-    print("Step 4/4 — Paths")
+    print("Step 4/4 — Paths & DUT responses")
     benchmark_dir = input("  Benchmark dir [medbench-agent-95/]: ").strip() or "medbench-agent-95/"
     output_dir = input("  Output dir [results/]: ").strip() or "results/"
-    responses_dir = input("  Model responses dir (leave blank to use gold answers): ").strip() or None
+    print()
+    print("  DUT responses input (leave blank to run gold-answer calibration):")
+    print("    [1] JSONL or TXT file  — all responses in one file (--responses-file)")
+    print("    [2] Directory          — per-sample .txt files    (--responses-dir)")
+    print("    [blank] Use gold answers as baseline")
+    resp_choice = input("  Input type [1/2/blank]: ").strip()
+    responses_file: str | None = None
+    responses_dir: str | None = None
+    if resp_choice == "1":
+        responses_file = input("  Path to JSONL/TXT file: ").strip() or None
+    elif resp_choice == "2":
+        responses_dir = input("  Path to responses directory: ").strip() or None
     print()
 
     # Confirm
+    resp_display = responses_file or responses_dir or "(using gold answers as baseline)"
     print("─" * 60)
     print(f"  DUT            : {dut}")
     print(f"  Capability     : {selected_cap.name}")
     print(f"  Tasks          : {', '.join(selected_cap.tasks)}")
     print(f"  Samples/task   : {samples}")
     print(f"  Benchmark dir  : {benchmark_dir}")
-    print(f"  Responses dir  : {responses_dir or '(using gold answers as baseline)'}")
+    print(f"  DUT responses  : {resp_display}")
     print(f"  Output dir     : {output_dir}")
     print("─" * 60)
     confirm = input("\n  Start evaluation? [Y/n]: ").strip().lower()
@@ -114,6 +132,7 @@ def _interactive_wizard() -> argparse.Namespace:
         task=None,
         dut=dut,
         model="claude-haiku-4-5",
+        responses_file=responses_file,
         responses_dir=responses_dir,
         samples=samples,
         output=output_dir,
@@ -133,6 +152,9 @@ def cmd_batch(args: argparse.Namespace) -> None:
     capability = getattr(args, "capability", None)
     dut = getattr(args, "dut", "unknown")
 
+    responses_file = getattr(args, "responses_file", None)
+    has_responses = bool(args.responses_dir or responses_file)
+
     result = run_benchmark(
         benchmark_dir=args.benchmark,
         tasks=tasks,
@@ -140,8 +162,11 @@ def cmd_batch(args: argparse.Namespace) -> None:
         model=args.model,
         dut=dut,
         samples_per_task=args.samples,
-        evaluate_gold=not args.responses_dir,
+        evaluate_gold=not has_responses,
         responses_dir=args.responses_dir,
+        responses_file=responses_file,
+        calibrate_n=getattr(args, "calibrate_n", 0),
+        calibrate_mode=getattr(args, "calibrate_mode", "random"),
         seed=args.seed,
         delay_seconds=args.delay,
         verbose=not args.quiet,
@@ -240,8 +265,37 @@ def build_parser() -> argparse.ArgumentParser:
     )
     batch.add_argument("--task", help="Evaluate a single task only (e.g. MedCOT)")
     batch.add_argument("--dut", default="unknown", help="Name of the model/system under test")
-    batch.add_argument("--responses-dir", help="Directory with model responses to evaluate")
+    batch.add_argument(
+        "--responses-file",
+        help=(
+            "Single file with all DUT responses. "
+            "Accepts: compact JSONL ({task,id,response}), "
+            "full benchmark JSONL ({question,answer,other}), "
+            "or delimited TXT (=== MedCOT | 97 ===)"
+        ),
+    )
+    batch.add_argument("--responses-dir", help="Directory with per-sample .txt files: {dir}/{task}/{id}.txt")
     batch.add_argument("--samples", type=int, default=5, help="Samples per task (default: 5)")
+    batch.add_argument(
+        "--calibrate-n", type=int, default=0, metavar="N",
+        help=(
+            "Show N gold anchor examples to the judge before each evaluation. "
+            "Improves alignment on tasks where the judge misunderstands task type "
+            "(e.g. MedCollab, MedDBOps). Recommended: 2. Default: 0 (disabled)."
+        ),
+    )
+    batch.add_argument(
+        "--calibrate-mode",
+        choices=["random", "bm25", "embedding"],
+        default="random",
+        help=(
+            "How to select calibration anchor examples (requires --calibrate-n > 0). "
+            "'random' (default): fixed-seed random sample per task. "
+            "'bm25': BM25 semantic retrieval per question (zero extra dependencies). "
+            "'embedding': SiliconFlow BAAI/bge-m3 embeddings per question "
+            "(requires MINIMAX_API_KEY and MINIMAX_BASE_URL env vars)."
+        ),
+    )
     batch.add_argument("--output", "-o", help="Output directory for results")
     batch.add_argument("--seed", type=int, default=42, help="Random seed (default: 42)")
     batch.add_argument("--delay", type=float, default=0.5, help="Delay between API calls (seconds)")

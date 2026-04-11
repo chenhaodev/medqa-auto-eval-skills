@@ -74,7 +74,17 @@ def _build_judge_prompt(
     response: str,
     gold_answer: Optional[str],
     dut: str = "unknown",
+    anchor_examples: Optional[list[dict]] = None,
 ) -> str:
+    """
+    Build the judge prompt.
+
+    Args:
+        anchor_examples: Optional list of calibration examples, each a dict with
+                         'question' and 'answer' keys drawn from gold benchmark.
+                         When provided, they are shown BEFORE the current question
+                         to anchor the judge's score-5 interpretation.
+    """
     criteria_text = "\n".join(
         f"""  - **{c.name}**: {c.description}
     Score 1: {c.score_1}
@@ -85,7 +95,7 @@ def _build_judge_prompt(
     gold_section = ""
     if gold_answer:
         gold_section = f"""
-## Gold Standard Answer (Reference)
+## Gold Standard Answer (Reference for THIS question)
 Use this ONLY to calibrate what "correct" looks like for this specific question.
 Do NOT require the model response to match the gold answer word-for-word or structure-for-structure.
 Award full credit when the model achieves the same clinical correctness through different means.
@@ -93,6 +103,30 @@ Award full credit when the model achieves the same clinical correctness through 
 {gold_answer[:2000]}{"..." if len(gold_answer) > 2000 else ""}
 ```
 """
+
+    # Few-shot calibration block: concrete examples of score-5 answers for this task
+    anchor_section = ""
+    if anchor_examples:
+        parts = [
+            "## Score-5 Calibration Examples",
+            f"The following are GOLD STANDARD answers for {task} tasks that deserve a score of 5 on all criteria.",
+            "Study these to calibrate your understanding of what an ideal response looks like for this task type.",
+            "Do NOT penalize the evaluated response for not matching these examples verbatim.",
+            "",
+        ]
+        for idx, ex in enumerate(anchor_examples, 1):
+            q_preview = str(ex.get("question", ""))[:500]
+            a_preview = str(ex.get("answer", ""))[:1000]
+            parts += [
+                f"### Calibration Example {idx}",
+                f"**Question (excerpt):** {q_preview}{'...' if len(str(ex.get('question',''))) > 500 else ''}",
+                f"**Ideal Answer (score 5):**",
+                f"```",
+                f"{a_preview}{'...' if len(str(ex.get('answer',''))) > 1000 else ''}",
+                f"```",
+                "",
+            ]
+        anchor_section = "\n".join(parts)
 
     criteria_names = [c.name for c in rubric.criteria]
     example_scores = {name: {"score": 4, "justification": "..."} for name in criteria_names}
@@ -103,12 +137,14 @@ Award full credit when the model achieves the same clinical correctness through 
         "major_errors_noted": ["list any substantive clinical errors that DID affect the score"],
     }
 
+    anchor_block = f"\n{anchor_section}\n" if anchor_section else ""
+
     return f"""# Medical AI Response Evaluation
 
 ## Task: {task}
 ## DUT (Model Under Test): {dut}
 {rubric.description}
-
+{anchor_block}
 ## Question / Clinical Scenario
 ```
 {question[:3000]}{"..." if len(question) > 3000 else ""}
@@ -184,6 +220,7 @@ def judge_response(
     gold_answer: Optional[str] = None,
     model: str = DEFAULT_MODEL,
     dut: str = "unknown",
+    anchor_examples: Optional[list[dict]] = None,
 ) -> JudgementResult:
     """
     Evaluate a model response against the task rubric using LLM-as-judge.
@@ -195,12 +232,19 @@ def judge_response(
         gold_answer: Optional gold standard answer for calibration
         model: Judge model identifier
         dut: Name of the model/system being evaluated (Device Under Test)
+        anchor_examples: Optional list of {question, answer} dicts from the gold benchmark.
+                         When provided, shown to the judge as concrete score-5 calibration
+                         examples BEFORE the actual question. Improves alignment on tasks
+                         where the judge misunderstands the task type (low ceiling problem).
 
     Returns:
         JudgementResult with per-criterion scores, minor/major error lists, and overall feedback
     """
     rubric = get_rubric(task)
-    prompt = _build_judge_prompt(task, rubric, question, response, gold_answer, dut=dut)
+    prompt = _build_judge_prompt(
+        task, rubric, question, response, gold_answer, dut=dut,
+        anchor_examples=anchor_examples,
+    )
 
     try:
         model_response: ModelResponse = call_model(prompt, model=model, system=SYSTEM_PROMPT)
@@ -259,6 +303,7 @@ def judge_against_gold(
     gold_answer: str,
     model: str = DEFAULT_MODEL,
     dut: str = "gold-standard",
+    anchor_examples: Optional[list[dict]] = None,
 ) -> JudgementResult:
     """
     Evaluate the gold standard answer itself to establish a ceiling score.
@@ -271,4 +316,5 @@ def judge_against_gold(
         gold_answer=gold_answer,
         model=model,
         dut=dut,
+        anchor_examples=anchor_examples,
     )
