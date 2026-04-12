@@ -1,7 +1,7 @@
 """
 Model abstraction layer for LLM-as-judge.
 Supports:
-  - claude-haiku-4-5        via Anthropic SDK   (ANTHROPIC_API_KEY)
+  - claude-haiku-4-5        via Anthropic SDK   (ANTHROPIC_API_KEY or CLAUDE_API_KEY)
   - minimax-m2.5            via SiliconFlow      (MINIMAX_API_KEY, MINIMAX_BASE_URL, MINIMAX_MODEL)
   - deepseek-chat           via DeepSeek API     (DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL)
 
@@ -34,6 +34,8 @@ def _load_dotenv(overwrite: bool = False) -> None:
             line = line.strip()
             if not line or line.startswith("#"):
                 continue
+            if line.lower().startswith("export "):
+                line = line[7:].lstrip()
             if "=" not in line:
                 continue
             key, _, value = line.partition("=")
@@ -123,9 +125,13 @@ def _call_claude(prompt: str, model: str = CLAUDE_HAIKU_FULL, system: str = "") 
     except ImportError as e:
         raise ImportError("Run: pip install anthropic") from e
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    api_key = (os.environ.get("ANTHROPIC_API_KEY") or "").strip() or (
+        os.environ.get("CLAUDE_API_KEY") or ""
+    ).strip()
     if not api_key:
-        raise EnvironmentError("ANTHROPIC_API_KEY not set")
+        raise EnvironmentError(
+            "ANTHROPIC_API_KEY or CLAUDE_API_KEY not set (Claude judge)"
+        )
 
     client = anthropic.Anthropic(api_key=api_key)
     kwargs: dict[str, Any] = {

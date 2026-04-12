@@ -4,8 +4,9 @@ Optional LLM judge integration: validate.py Mode 2 (gold vs real DUT).
 - Does **not** use Claude Code / OpenCode or SKILL.md — plain subprocess + API key.
 - **Skipped by default** to avoid cost; enable with:
 
-      RUN_JUDGE_COMPARE=1 ANTHROPIC_API_KEY=... \\
-        uv run --group dev pytest tests/test_judge_compare_integration.py -v
+      RUN_JUDGE_COMPARE=1 uv run --group dev pytest tests/test_judge_compare_integration.py -v
+
+  (Uses ANTHROPIC_API_KEY or CLAUDE_API_KEY from repo `.env` if not exported.)
 
 - Uses `tests/fixtures/gpt41_agent_slice` (checked-in GPT-4.1 answers) unless
   `MEDBENCH_COMPARE_DIR` points at a full `MedBench_Agent` tree.
@@ -20,6 +21,9 @@ import tempfile
 from pathlib import Path
 
 import pytest
+
+# Load repo root .env before skipif evaluates (shell may not export ANTHROPIC_*).
+import judge.llm_client  # noqa: F401
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FIXTURE_AGENT = REPO_ROOT / "tests/fixtures/gpt41_agent_slice"
@@ -39,17 +43,26 @@ def _compare_dir() -> Path:
     return FIXTURE_AGENT
 
 
-def _should_run_llm_compare() -> bool:
-    return (
-        os.environ.get("ANTHROPIC_API_KEY", "").strip() != ""
-        and os.environ.get("RUN_JUDGE_COMPARE", "").lower() in ("1", "true", "yes")
+def _has_claude_key() -> bool:
+    return bool(
+        (os.environ.get("ANTHROPIC_API_KEY") or "").strip()
+        or (os.environ.get("CLAUDE_API_KEY") or "").strip()
     )
+
+
+def _should_run_llm_compare() -> bool:
+    return _has_claude_key() and os.environ.get(
+        "RUN_JUDGE_COMPARE", ""
+    ).lower() in ("1", "true", "yes")
 
 
 @pytest.mark.integration
 @pytest.mark.skipif(
     not _should_run_llm_compare(),
-    reason="Set RUN_JUDGE_COMPARE=1 and ANTHROPIC_API_KEY to run (calls Claude API).",
+    reason=(
+        "Set RUN_JUDGE_COMPARE=1 and ANTHROPIC_API_KEY or CLAUDE_API_KEY "
+        "to run (calls Claude API)."
+    ),
 )
 def test_validate_mode2_medcot_gold_vs_gpt41_gap() -> None:
     """
