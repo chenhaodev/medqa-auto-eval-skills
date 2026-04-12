@@ -4,9 +4,9 @@ Use an **LLM judge** to score answers on **MedBench-Agent-95** (390 items, **13 
 
 | You are… | Start here |
 |----------|------------|
-| **A person** using Claude / Cursor with the skill | Read **[`SKILL.md`](SKILL.md)** — that is the contract for `/medbench-eval`. This README is for the **repo and CLI**. |
-| **An agent** automating setup and commands | Jump to **[Automation checklist](#automation-checklist-for-agents)** (copy-paste blocks below). |
-| **A maintainer** changing rubrics, capabilities, or dependencies | See **[Maintainers](#maintainers)**, [`references/PROTOCOL.md`](references/PROTOCOL.md), and [`references/README.md`](references/README.md). |
+| **A person** using Claude / Cursor with the skill | Read **[`SKILL.md`](SKILL.md)** — contract for `/medbench-eval`. This README covers **repo + CLI**. |
+| **An agent** (Cursor, CI, etc.) | **[Automation checklist](#automation-checklist-for-agents)** below. **Claude Code** also loads **[`CLAUDE.md`](CLAUDE.md)**. |
+| **A maintainer** changing rubrics, capabilities, or dependencies | **[Maintainers](#maintainers)**, [`references/PROTOCOL.md`](references/PROTOCOL.md), [`references/README.md`](references/README.md). |
 
 ---
 
@@ -156,6 +156,7 @@ references/
   rubrics.md            # generated from rubrics.yaml; do not edit by hand
   medbench-agent-95/    # gold JSONL per task
 SKILL.md                # skill /medbench-eval behavior
+CLAUDE.md               # Claude Code agent notes (this file is optional for humans)
 ```
 
 ---

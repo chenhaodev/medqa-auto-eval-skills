@@ -29,9 +29,20 @@ One question per turn; never dump all at once.
 1. **DUT** — what model/system is under test?
 2. **Capability** — `[1]` reasoning (MedCOT, MedDecomp, MedPathPlan) · `[2]` long_context (MedLongQA, MedLongConv) · `[3]` tool_use (MedCallAPI, MedRetAPI, MedDBOps) · `[4]` orchestration (MedCollab) · `[5]` self_correction (MedReflect) · `[6]` role_adapt (MedRoleAdapt) · `[7]` safety (MedShield, MedDefend) · `[8]` full (all 13).
 3. **Samples** — 3 / 5 / 10 / 30 per task.
-4. **Answers** — paste 1-by-1 · paste with IDs (`ID: N` / `N:`) · CSV `id,response` · JSONL `{"id","response"}` only.
+4. **Question Export** — For **each** task in scope, read `references/medbench-agent-95/{Task}.jsonl` and sample `N` rows with the **same reproducible rule** as `eval.py batch` (default `--seed` **42**; override with `Seed:`). Emit **questions only** (not gold answers). Format: **JSONL** (default) · **numbered list** · **skip**. One JSONL line: `{"id": <int>, "task": "<Task>", "question": "<text>"}`. List chosen **IDs** — they anchor step 5.
+5. **Response Intake** — Parse DUT paste (table below). Say "Got N/N responses. Scoring…" then score — no extra confirm.
 
-Restate DUT + capability + N + format, then collect. When enough answers are in, **score immediately** (no extra confirm).
+### Response formats
+
+| Format | What to paste |
+|--------|--------------|
+| **JSONL** | `{"id": 97, "response": "..."}` — one per line |
+| **CSV** | Header `id,response`, then one data row per answer |
+| **ID-prefixed text** | `97: answer text here` — one entry per line |
+| **Delimited text** | `=== MedCOT 97 ===` … answer … `=== MedCOT 12 ===` … answer |
+| **Sequential / 1-by-1** | One answer per message or blank-line-separated blocks — order must match exported IDs |
+
+**Parse errors:** name the line ("Line 3 …") and wait for a fix. Chat-side formats (e.g. `id:` lines) may need manual mapping; for **`eval.py --responses-file`**, prefer **JSONL** or **delimited** headers like `=== Task id ===` (see [`references/README.md`](references/README.md)).
 
 ---
 
@@ -41,6 +52,9 @@ Restate DUT + capability + N + format, then collect. When enough answers are in,
 |-|-|
 | `DUT`, `Task` or `Capability`, `Question`, `Response` | single eval; optional `Gold` |
 | `Mode: batch` + paths for benchmark / responses / output | **only if** the user is driving automation from the repo (same concepts as below; file layouts → [`references/README.md`](references/README.md)) |
+| `Seed: N` | Sample selection seed for question export and batch sampling (default `42`) |
+| `Output: md\|jsonl\|csv` | Results format — markdown table (default), JSONL per item, or flat CSV |
+| `Questions: jsonl\|list\|skip` | Question export format in wizard step 4 (default `jsonl`) |
 
 Capability keys: `reasoning`, `long_context`, `tool_use`, `orchestration`, `self_correction`, `role_adapt`, `safety`, `full`. Tasks: MedCOT, MedCallAPI, MedCollab, MedDBOps, MedDecomp, MedDefend, MedLongConv, MedLongQA, MedPathPlan, MedReflect, MedRetAPI, MedRoleAdapt, MedShield. Judge models: `claude-haiku-4-5` (default), `minimax-m2.5`, `deepseek-chat`.
 
@@ -69,3 +83,5 @@ Capability keys: `reasoning`, `long_context`, `tool_use`, `orchestration`, `self
 ```
 
 Bands: 90–100 exceptional · 75–89 strong · 60–74 adequate · 40–59 weak · 0–39 poor.
+
+**Results:** default = markdown block above. `Output: jsonl` → one object per item with `task`, `id`, `normalized_score`, `total_score`, `criterion_scores`, `major_errors`. `Output: csv` → `task,id,normalized_score,total_score`.
