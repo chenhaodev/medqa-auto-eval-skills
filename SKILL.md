@@ -16,9 +16,11 @@ description: >
 
 MedBench-Agent-95: 13 tasks, Likert 1–5 per criterion → **normalized 0–100** = (average criterion score − 1) / 4 × 100. Judge **substance**, not formatting.
 
-**Rubrics:** Read `references/rubrics.md` first (generated from `references/rubrics.yaml`) — use the **exact criterion names** listed there (do not invent names). **Gold benchmark:** questions + gold answers live in `references/medbench-agent-95/{Task}.jsonl` — load **one row by id** when showing items; details in [`references/README.md`](references/README.md). **Scoring:** gold calibrates “what good looks like”; never require verbatim match to DUT.
+**You ARE the judge.** No API keys or external LLM calls needed — you read rubrics from `references/rubrics.md`, score each criterion 1–5 yourself, and compute the normalized score. The user runs their DUT (e.g. DeepSeek) externally and pastes answers back for you to score.
 
-**This file defines in-chat behavior only.** Optional install, batch files on disk, and judge-alignment checks are **not** required for `/medbench-eval` — see [`README.md`](README.md) if the user needs repo automation.
+**Rubrics:** Read `references/rubrics.md` first (generated from `references/rubrics.yaml`) — use the **exact criterion names** listed there (do not invent names). **Gold benchmark:** questions + gold answers live in `references/medbench-agent-95/{Task}.jsonl` — load **one row by id** when showing items; details in [`references/README.md`](references/README.md). **Scoring:** gold calibrates "what good looks like"; never require verbatim match to DUT.
+
+**This file defines in-chat behavior only.** Optional install, batch files on disk, and judge-alignment checks are **not** required for `/medbench-eval` — see [`README.md`](README.md) if the user needsrepo automation (those CLI commands do require API keys).
 
 ---
 
@@ -56,7 +58,7 @@ One question per turn; never dump all at once.
 | `Output: md\|jsonl\|csv` | Results format — markdown table (default), JSONL per item, or flat CSV |
 | `Questions: jsonl\|list\|skip` | Question export format in wizard step 4 (default `jsonl`) |
 
-Capability keys: `reasoning`, `long_context`, `tool_use`, `orchestration`, `self_correction`, `role_adapt`, `safety`, `full`. Tasks: MedCOT, MedCallAPI, MedCollab, MedDBOps, MedDecomp, MedDefend, MedLongConv, MedLongQA, MedPathPlan, MedReflect, MedRetAPI, MedRoleAdapt, MedShield. Judge models: `claude-haiku-4-5` (default), `minimax-m2.5`, `deepseek-chat`.
+Capability keys: `reasoning`, `long_context`, `tool_use`, `orchestration`, `self_correction`, `role_adapt`, `safety`, `full`. Tasks: MedCOT, MedCallAPI, MedCollab, MedDBOps, MedDecomp, MedDefend, MedLongConv, MedLongQA, MedPathPlan, MedReflect, MedRetAPI, MedRoleAdapt, MedShield.
 
 ---
 
@@ -71,7 +73,7 @@ Capability keys: `reasoning`, `long_context`, `tool_use`, `orchestration`, `self
 
 ```markdown
 ## MedBench-Eval: {Task}
-**DUT:** … | **Judge:** …
+**DUT:** … | **Judge:** self (OpenCode agent)
 ### Criterion Scores
 | Criterion | Score | Justification |
 | … | n/5 | … |
