@@ -214,6 +214,56 @@ def test_parse_responses_compact_jsonl_file(tmp_path: Path) -> None:
     assert got["MedCOT"][1] == "hello"
 
 
+def test_parse_responses_jsonl_id_response_without_task_uses_unknown(tmp_path: Path) -> None:
+    """SKILL allows {"id", "response"} lines; file-based parse uses task=unknown."""
+    from judge.runner import parse_responses
+
+    p = tmp_path / "dut.jsonl"
+    p.write_text('{"id": 42, "response": "no task key"}\n', encoding="utf-8")
+    got = parse_responses(p)
+    assert got["unknown"][42] == "no task key"
+
+
+def test_parse_responses_text_jsonl_id_response_respects_default_task() -> None:
+    """Clipboard / chat path: id+response lines map to default_task (SKILL table)."""
+    from judge.runner import parse_responses_text
+
+    text = (
+        '{"id": 5, "response": "a"}\n'
+        '{"id": 6, "response": "b"}\n'
+    )
+    got = parse_responses_text(text, default_task="MedCOT")
+    assert got["MedCOT"][5] == "a"
+    assert got["MedCOT"][6] == "b"
+
+
+def test_parse_responses_text_tries_jsonl_before_sequential() -> None:
+    """First non-empty line `{` → JSONL, not sequential chunks."""
+    from judge.runner import parse_responses_text
+
+    text = '{"id": 0, "response": "jsonl wins"}\n'
+    got = parse_responses_text(text, default_task="MedCOT")
+    assert got["MedCOT"][0] == "jsonl wins"
+
+
+def test_medcot_sample_selection_reproducible_with_seed_42() -> None:
+    """Same rule as eval.py batch --seed 42 (SKILL question export)."""
+    import random
+
+    from judge.refs import default_benchmark_dir
+    from judge.runner import load_task_jsonl_samples
+
+    samples = load_task_jsonl_samples(default_benchmark_dir(), "MedCOT")
+    assert len(samples) >= 2
+    n = min(7, len(samples))
+
+    def pick() -> list[dict]:
+        rng = random.Random(42)
+        return rng.sample(samples, n)
+
+    assert pick() == pick()
+
+
 def test_parse_responses_delimited_txt_file(tmp_path: Path) -> None:
     from judge.runner import parse_responses
 

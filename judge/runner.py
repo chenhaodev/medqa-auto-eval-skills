@@ -40,13 +40,25 @@ def parse_responses(source: Union[str, Path]) -> ParsedResponses:
 
     first_line = next((l.strip() for l in text.splitlines() if l.strip()), "")
     if first_line.startswith("{"):
-        return _parse_jsonl(text)
+        return _parse_jsonl(text, default_task="unknown")
 
     return _parse_delimited_txt(text)
 
 
 def parse_responses_text(text: str, default_task: str = "unknown") -> ParsedResponses:
-    """Parse DUT responses from raw pasted text."""
+    """Parse DUT responses from raw pasted text (chat / clipboard).
+
+    Tries JSONL when the first non-empty line looks like JSON; then delimited
+    headers (``=== Task id ===``); then sequential chunks (order = sample
+    order). For JSONL lines with ``id`` + ``response`` but no ``task``, uses
+    ``default_task`` (match :func:`parse_responses` file JSONL when task is set
+    per line).
+    """
+    first = next((l.strip() for l in text.splitlines() if l.strip()), "")
+    if first.startswith("{"):
+        got = _parse_jsonl(text, default_task=default_task)
+        if got:
+            return got
     result = _parse_delimited_txt(text)
     if result:
         return result
@@ -75,7 +87,7 @@ def _parse_benchmark_dir(directory: Path) -> ParsedResponses:
     return {k: v for k, v in result.items() if v}
 
 
-def _parse_jsonl(text: str) -> ParsedResponses:
+def _parse_jsonl(text: str, default_task: str = "unknown") -> ParsedResponses:
     result: ParsedResponses = {}
     for line in text.splitlines():
         line = line.strip()
@@ -89,6 +101,10 @@ def _parse_jsonl(text: str) -> ParsedResponses:
         if "task" in rec and ("response" in rec or "answer" in rec):
             task = str(rec["task"])
             sample_id = int(rec.get("id", rec.get("question_id", 0)))
+            response = str(rec.get("response", rec.get("answer", "")))
+        elif "id" in rec and ("response" in rec or "answer" in rec):
+            task = str(rec.get("task", default_task))
+            sample_id = int(rec["id"])
             response = str(rec.get("response", rec.get("answer", "")))
         elif "other" in rec and isinstance(rec["other"], dict):
             other = rec["other"]
