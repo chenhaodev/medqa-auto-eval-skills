@@ -455,6 +455,38 @@ def load_task_jsonl_samples(benchmark_dir: Union[str, Path], task: str) -> list[
     return _load_task_samples(Path(benchmark_dir), task)
 
 
+def select_rows_for_task(
+    rng: random.Random,
+    samples: list[dict],
+    samples_per_task: int,
+) -> list[dict]:
+    """Pick up to ``samples_per_task`` rows using ``rng`` (``run_benchmark`` rule)."""
+    if not samples:
+        return []
+    k = min(samples_per_task, len(samples))
+    return rng.sample(samples, k)
+
+
+def sample_rows_shared_rng_for_tasks(
+    benchmark_dir: Union[str, Path],
+    tasks_to_run: list[str],
+    samples_per_task: int,
+    seed: int,
+) -> dict[str, list[dict]]:
+    """Selection-only mirror of :func:`run_benchmark` (one RNG across tasks).
+
+    No API calls. Use for tests and reproducibility checks against ``eval.py
+    batch`` / ``eval.py generate``.
+    """
+    benchmark_path = Path(benchmark_dir)
+    rng = random.Random(seed)
+    result: dict[str, list[dict]] = {}
+    for task in tasks_to_run:
+        loaded = _load_task_samples(benchmark_path, task)
+        result[task] = select_rows_for_task(rng, loaded, samples_per_task)
+    return result
+
+
 def run_benchmark(
     benchmark_dir: str,
     tasks: Optional[list[str]] = None,
@@ -500,7 +532,7 @@ def run_benchmark(
             result.errors.append(f"{task}: no samples found")
             continue
 
-        selected = rng.sample(samples, min(samples_per_task, len(samples)))
+        selected = select_rows_for_task(rng, samples, samples_per_task)
         selected_ids = {
             s.get("other", {}).get("id") for s in selected
             if isinstance(s.get("other"), dict)

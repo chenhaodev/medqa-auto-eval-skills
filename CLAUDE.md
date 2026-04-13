@@ -49,6 +49,11 @@ references/
 
 **Flow:** `runner` → `scoring` → `llm_client`; `runner` → `refs`; `generate_answers` → `llm_client`, `runner`.
 
+## Contributor documentation
+
+- **`references/PROTOCOL.md`** — spec vs implementation; **sampling** (shared RNG vs wizard per-task rule).
+- **`judge/DESIGN.md`** — short guide to each `judge/` module without reading Python.
+
 ## Rules
 
 - **Policy in data:** rubrics in `references/rubrics.yaml`; groupings in `references/capabilities.json`. Do not hardcode criteria or task lists in `.py`.

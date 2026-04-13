@@ -31,7 +31,7 @@ One question per turn; never dump all at once.
 1. **DUT** — what model/system is under test?
 2. **Capability** — `[1]` reasoning (MedCOT, MedDecomp, MedPathPlan) · `[2]` long_context (MedLongQA, MedLongConv) · `[3]` tool_use (MedCallAPI, MedRetAPI, MedDBOps) · `[4]` orchestration (MedCollab) · `[5]` self_correction (MedReflect) · `[6]` role_adapt (MedRoleAdapt) · `[7]` safety (MedShield, MedDefend) · `[8]` full (all 13).
 3. **Samples** — 3 / 5 / 10 / 30 per task.
-4. **Question Export** — For **each** task in scope, read `references/medbench-agent-95/{Task}.jsonl` and sample `N` rows with the **same reproducible rule** as `eval.py batch` (default `--seed` **42**; override with `Seed:`). Emit **questions only** (not gold answers). Format: **JSONL** (default) · **numbered list** · **skip**. One JSONL line: `{"id": <int>, "task": "<Task>", "question": "<text>"}`. List chosen **IDs** — they anchor step 5.
+4. **Question Export** — **CLI vs wizard:** `eval.py batch` uses **one shared RNG** across tasks in capability order; the in-chat wizard uses **per-task** `Random(42).sample(file_order_rows, N)`. Full semantics and why IDs can differ are in [`references/PROTOCOL.md`](references/PROTOCOL.md) (§ Sampling algorithm). For **each** task in scope, read `references/medbench-agent-95/{Task}.jsonl` and sample `N` rows (default seed **42**; override with `Seed:`). Write **questions only** (not gold answers) to **`medbench-questions.jsonl`** in the working directory — one line per question: `{"id": <int>, "task": "<Task>", "question": "<text>"}`. In chat, report the file path and list sampled **IDs** per task — IDs anchor step 5. Feed the file to your DUT externally. **Fallback** if file write is unavailable: paste inline one task per reply. Override with `Questions: list` (inline numbered list) · `Questions: skip` (IDs only, no question text).
 5. **Response Intake** — Parse DUT paste (table below). Say "Got N/N responses. Scoring…" then score — no extra confirm.
 
 ### Response formats
@@ -56,7 +56,7 @@ One question per turn; never dump all at once.
 | `Mode: batch` + paths for benchmark / responses / output | **only if** the user is driving automation from the repo (same concepts as below; file layouts → [`references/README.md`](references/README.md)) |
 | `Seed: N` | Sample selection seed for question export and batch sampling (default `42`) |
 | `Output: md\|jsonl\|csv` | Results format — markdown table (default), JSONL per item, or flat CSV |
-| `Questions: jsonl\|list\|skip` | Question export format in wizard step 4 (default `jsonl`) |
+| `Questions: jsonl\|list\|skip` | Question export: `jsonl` = write `medbench-questions.jsonl` file (default) · `list` = inline numbered · `skip` = IDs only |
 
 Capability keys: `reasoning`, `long_context`, `tool_use`, `orchestration`, `self_correction`, `role_adapt`, `safety`, `full`. Tasks: MedCOT, MedCallAPI, MedCollab, MedDBOps, MedDecomp, MedDefend, MedLongConv, MedLongQA, MedPathPlan, MedReflect, MedRetAPI, MedRoleAdapt, MedShield.
 

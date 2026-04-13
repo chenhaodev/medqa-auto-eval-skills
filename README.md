@@ -85,7 +85,7 @@ python eval.py batch \
 
 ### 2b. Generate answers (DeepSeek, etc.) then batch-judge
 
-Use an **answer model** (default `deepseek-chat`; set `DEEPSEEK_API_KEY` in `.env`) to answer gold questions. By default, repo **`SKILL.md`** is injected as **system** context (use `--no-skill` to disable). Sample selection matches **`eval.py batch`** when you use the same **`--samples`** and **`--seed`**.
+Use an **answer model** (default `deepseek-chat`; set `DEEPSEEK_API_KEY` in `.env`) to answer gold questions. By default, repo **`SKILL.md`** is injected as **system** context (use `--no-skill` to disable). Sample selection uses the **same shared RNG across tasks** as **`eval.py batch`** when you use the same **`--samples`**, **`--seed`**, and the same task list (e.g. same `--task` or `--capability`).
 
 ```bash
 python eval.py generate -o generated/dut/ --task MedCOT --samples 3 --seed 42 --answer-model deepseek-chat
@@ -166,7 +166,8 @@ CLAUDE.md               # Claude Code agent notes (this file is optional for hum
 | File | Contents |
 |------|----------|
 | [`references/README.md`](references/README.md) | Gold file format, rubric regeneration, skill-oriented notes |
-| [`references/PROTOCOL.md`](references/PROTOCOL.md) | Protocol vs Python in this repo |
+| [`references/PROTOCOL.md`](references/PROTOCOL.md) | Protocol vs Python in this repo; exact batch vs wizard sampling |
+| [`judge/DESIGN.md`](judge/DESIGN.md) | Plain-language overview of each `judge/` module (refs, llm_client, scoring, runner) |
 | [`judge/README.md`](judge/README.md) | Module map and implementation notes |
 
 ---
@@ -177,6 +178,7 @@ CLAUDE.md               # Claude Code agent notes (this file is optional for hum
 - After editing the **`[project]` `dependencies`** list in `pyproject.toml`: run `uv lock`, then optionally `uv export …` for pip users.
 - Regenerate **`references/rubrics.md`** after changing **`references/rubrics.yaml`**: `python -m judge.refs`.
 - Edit **`references/capabilities.json`** to change capability → task grouping (no Python edit required for that).
+- **OpenCode skill copy:** `references/` may be hardlinked to your local skill install; **`SKILL.md` is not.** After editing repo **`SKILL.md`**, sync the installed skill, e.g. `cp SKILL.md ~/.config/opencode/skills/medbench-eval/SKILL.md` (adjust path if your OpenCode config dir differs).
 
 ---
 

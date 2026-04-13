@@ -1,8 +1,9 @@
 """
 Generate benchmark answers with an LLM (e.g. DeepSeek), then score with ``eval.py batch``.
 
-Uses the same sample selection as ``run_benchmark`` (seeded random subset) so
-``--samples`` / ``--seed`` align with a follow-up ``eval.py batch`` call.
+Uses the same sample selection as ``run_benchmark``: **one** ``Random(seed)``
+across all tasks in order, so multi-task ``--capability`` runs match
+``eval.py batch`` / ``eval.py generate`` for the same ``--samples`` / ``--seed``.
 """
 
 from __future__ import annotations
@@ -17,7 +18,7 @@ from typing import Optional
 
 from .llm_client import DEEPSEEK_CHAT, call_model
 from .refs import default_benchmark_dir, get_tasks_for_capability, resolve_benchmark_dir
-from .runner import BENCHMARK_TASKS, load_task_jsonl_samples
+from .runner import BENCHMARK_TASKS, load_task_jsonl_samples, select_rows_for_task
 
 ANSWER_SYSTEM_BASE = (
     "You are a medical AI assistant. Follow the user's instructions and any "
@@ -65,7 +66,7 @@ def generate_jsonl_for_task(
     answer_model: str,
     system_prompt: str,
     samples_per_task: int,
-    seed: int,
+    rng: random.Random,
     delay_seconds: float,
     verbose: bool,
 ) -> list[dict]:
@@ -75,8 +76,7 @@ def generate_jsonl_for_task(
     if not samples:
         return []
 
-    rng = random.Random(seed)
-    selected = rng.sample(samples, min(samples_per_task, len(samples)))
+    selected = select_rows_for_task(rng, samples, samples_per_task)
     out: list[dict] = []
 
     for i, sample in enumerate(selected):
@@ -139,6 +139,7 @@ def run_generate_answers(args: argparse.Namespace) -> None:
     out_dir = Path(args.output_dir).expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    rng = random.Random(args.seed)
     for task in tasks:
         rows = generate_jsonl_for_task(
             benchmark_dir=str(benchmark_path),
@@ -146,7 +147,7 @@ def run_generate_answers(args: argparse.Namespace) -> None:
             answer_model=args.answer_model,
             system_prompt=system_prompt,
             samples_per_task=args.samples,
-            seed=args.seed,
+            rng=rng,
             delay_seconds=args.delay,
             verbose=not args.quiet,
         )

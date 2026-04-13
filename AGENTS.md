@@ -44,6 +44,11 @@ python -m scripts.validate --task MedCOT --samples 3  # judge alignment check (u
 
 **Dependency chain:** `runner` → `scoring` → `llm_client`; `runner` → `refs`; `scoring` → `refs`; `generate_answers` → `llm_client` + `runner`.
 
+## Protocol & module docs
+
+- **`references/PROTOCOL.md`** — protocol vs Python, including the exact **sampling algorithm** (shared RNG for `eval.py batch` vs in-chat wizard approximation).
+- **`judge/DESIGN.md`** — plain-language overview of each `judge/` module for contributors who prefer not to read code.
+
 ## Data policy
 
 - **Rubrics:** edit `references/rubrics.yaml`. `references/rubrics.md` is **generated** — never edit by hand. After YAML changes, run `python -m judge.refs`.

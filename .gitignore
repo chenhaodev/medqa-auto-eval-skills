@@ -14,6 +14,14 @@ venv/
 .venv/
 env/
 
+# Wizard / skill question export (often written to repo cwd)
+medbench-questions.jsonl
+
+# Local chat exports / scratch (not part of the repo)
+cc.md
+omo.md
+session-*.md
+
 # Results & outputs (generated, not committed)
 results/
 results-*/
